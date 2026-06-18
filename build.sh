@@ -1,2 +1,2 @@
 #!/bin/sh
-esbuild planet-generation.js --bundle --minify --sourcemap --outfile=build/_bundle.js
+node_modules/.bin/esbuild planet-generation.js --bundle --minify --sourcemap --outfile=build/_bundle.js

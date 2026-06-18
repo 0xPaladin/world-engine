@@ -122,6 +122,7 @@ function stereographicProjection(r_xyz) {
 
 
 function makeSphere(N, jitter, randFloat) {
+    _randomLat = []; _randomLon = [];
     let latlong = generateFibonacciSphere(N, jitter, randFloat);
     let r_xyz = [];
     for (let r = 0; r < latlong.length/2; r++) {

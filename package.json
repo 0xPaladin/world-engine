@@ -10,7 +10,10 @@
         "flatqueue": "*",
         "gl-matrix": "*",
         "hash-int": "*",
-        "regl": "*",
+        "regl": "1.7.0",
         "simplex-noise": "^2"
+    },
+    "devDependencies": {
+        "esbuild": "^0.28.1"
     }
 }

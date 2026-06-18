@@ -6,14 +6,15 @@
  * Adapting mapgen4 code for a sphere. Quick & dirty, for procjam2018
  */
 
-const SEED = 123;
+let _seed = 123;
 
 const SimplexNoise = require('simplex-noise');
-const FlatQueue = require('flatqueue');
+const {default: FlatQueue} = require('flatqueue');
 const colormap = require('./colormap');
-const {vec3, mat4} = require('gl-matrix');
+const {vec3, vec4, mat4} = require('gl-matrix');
 const {makeRandInt, makeRandFloat} = require('@redblobgames/prng');
 const SphereMesh = require('./sphere-mesh');
+const {generatePopulation} = require('./world-population');
 
 const regl = require('regl')({
     canvas: "#output",
@@ -34,10 +35,16 @@ let N = 10000;
 let P = 20;
 let jitter = 0.75;
 let rotation = -1;
-let drawMode = 'centroid';
+let drawMode = 'quads';
 let draw_plateVectors = false;
 let draw_plateBoundaries = false;
+let tempOffset = 0;
+let rainOffset = 0;
+let waterLevel = 0;
 
+window.generateMesh = generateMesh;
+window.setSeed = newSeed => { _seed = newSeed; };
+window.getSeed = () => _seed;
 window.setN = newN => { N = newN; generateMesh(); };
 window.setP = newP => { P = newP; generateMap(); };
 window.setJitter = newJitter => { jitter = newJitter; generateMesh(); };
@@ -45,6 +52,23 @@ window.setRotation = newRotation => { rotation = newRotation; draw(); };
 window.setDrawMode = newMode => { drawMode = newMode; draw(); };
 window.setDrawPlateVectors = flag => { draw_plateVectors = flag; draw(); };
 window.setDrawPlateBoundaries = flag => { draw_plateBoundaries = flag; draw(); };
+window.setTempOffset = v => { tempOffset = v; draw(); };
+window.setRainOffset = v => { rainOffset = v; draw(); };
+window.setWaterLevel = v => { waterLevel = v; draw(); };
+window.getTempOffset = () => tempOffset;
+window.getRainOffset = () => rainOffset;
+window.setCultureOverlay = flag => { draw_cultureOverlay = flag; draw(); };
+window.setStateBorders = flag => { draw_stateBorders = flag; draw(); };
+window.applyPopulation = () => {
+  if (!mesh || !map.r_elevation) return;
+  population = generatePopulation(mesh, map, window._numCultures || 8, _seed);
+  window._population = population;
+  _overlayDirty = true;
+  buildOverlayGeometry(mesh, population);
+  draw();
+};
+window.getNumCultures = () => window._numCultures || 8;
+window.setNumCultures = v => { window._numCultures = v; };
 
 const renderPoints = regl({
     frag: `
@@ -223,11 +247,40 @@ void main() {
     },
 });
 
+const renderFlatTriangles = regl({
+    frag: `
+precision mediump float;
+varying vec3 v_rgb;
+void main() {
+   gl_FragColor = vec4(v_rgb, 1);
+}
+`,
+    vert: `
+precision mediump float;
+uniform mat4 u_projection;
+attribute vec3 a_xyz;
+attribute vec3 a_rgb;
+varying vec3 v_rgb;
+void main() {
+  v_rgb = a_rgb;
+  gl_Position = u_projection * vec4(a_xyz, 1);
+}
+`,
+    uniforms: {
+        u_projection: regl.prop('u_projection'),
+    },
+    count: regl.prop('count'),
+    attributes: {
+        a_xyz: regl.prop('a_xyz'),
+        a_rgb: regl.prop('a_rgb'),
+    },
+});
+
 /**********************************************************************
  * Geometry
  */
 
-let _randomNoise = new SimplexNoise(makeRandFloat(SEED));
+let _randomNoise = new SimplexNoise(makeRandFloat(_seed));
 const persistence = 2/3;
 const amplitudes = Array.from({length: 5}, (_, octave) => Math.pow(persistence, octave));
 
@@ -292,6 +345,22 @@ class QuadGeometry {
         /* xyz = position in 3-space;
            tm = temperature, moisture
            I = indices for indexed drawing mode */
+    }
+
+    applyClimate(numRegions, numTriangles, r_elevation, r_moisture, t_elevation, t_moisture, tempOff, rainOff, waterOff) {
+        const {tm} = this;
+        let p = 0;
+        let scale = tempOff > 0 ? 1 / (1 + tempOff * 3) : (1 + Math.abs(tempOff) * 2);
+        for (let r = 0; r < numRegions; r++) {
+            let e = r_elevation[r] - waterOff;
+            tm[p++] = e > 0 ? e * scale : e;
+            tm[p++] = Math.min(1, Math.max(0, r_moisture[r] + rainOff));
+        }
+        for (let t = 0; t < numTriangles; t++) {
+            let e = t_elevation[t] - waterOff;
+            tm[p++] = e > 0 ? e * scale : e;
+            tm[p++] = Math.min(1, Math.max(0, t_moisture[t] + rainOff));
+        }
     }
 
     setMesh({numSides, numRegions, numTriangles}) {
@@ -366,11 +435,11 @@ function pickRandomRegions(mesh, N, randInt) {
 function generatePlates(mesh, r_xyz) {
     let r_plate = new Int32Array(mesh.numRegions);
     r_plate.fill(-1);
-    let plate_r = pickRandomRegions(mesh, Math.min(P, N), makeRandInt(SEED));
+    let plate_r = pickRandomRegions(mesh, Math.min(P, N), makeRandInt(_seed));
     let queue = Array.from(plate_r);
     for (let r of queue) { r_plate[r] = r; }
     let out_r = [];
-    const randInt = makeRandInt(SEED);
+    const randInt = makeRandInt(_seed);
 
     /* In Breadth First Search (BFS) the queue will be all elements in
        queue[queue_out ... queue.length-1]. Pushing onto the queue
@@ -414,7 +483,7 @@ function generatePlates(mesh, r_xyz) {
 /* Distance from any point in seeds_r to all other points, but 
  * don't go past any point in stop_r */
 function assignDistanceField(mesh, seeds_r, stop_r) {
-    const randInt = makeRandInt(SEED);
+    const randInt = makeRandInt(_seed);
     let {numRegions} = mesh;
     let r_distance = new Float32Array(numRegions);
     r_distance.fill(Infinity);
@@ -634,7 +703,8 @@ var mesh, map = {};
 var quadGeometry = new QuadGeometry();
 
 function generateMesh() {
-    let result = SphereMesh.makeSphere(N, jitter, makeRandFloat(SEED));
+    _randomNoise = new SimplexNoise(makeRandFloat(_seed));
+    let result = SphereMesh.makeSphere(N, jitter, makeRandFloat(_seed));
     mesh = result.mesh;
     quadGeometry.setMesh(mesh);
     
@@ -665,9 +735,9 @@ function generateMap() {
         }
     }
     assignRegionElevation(mesh, map);
-    // TODO: assign region moisture in a better way!
     for (let r = 0; r < mesh.numRegions; r++) {
-        map.r_moisture[r] = (map.r_plate[r] % 10) / 10.0;
+        let n = 0.5 + 0.5 * fbm_noise(map.r_xyz[3*r], map.r_xyz[3*r+1], map.r_xyz[3*r+2]);
+        map.r_moisture[r] = Math.max(0.15, Math.min(1, n));
     }
     assignTriangleValues(mesh, map);
     assignDownflow(mesh, map);
@@ -722,18 +792,21 @@ function drawPlateBoundaries(u_projection, mesh, {t_xyz, r_plate}) {
     });
 }
 
-function drawRivers(u_projection, mesh, {t_xyz, s_flow}) {
+function drawRivers(u_projection, mesh, {t_xyz, s_flow, r_elevation}) {
     let line_xyz = [], line_rgba = [];
 
     for (let s = 0; s < mesh.numSides; s++) {
-        if (s_flow[s] > 1) {
-            let flow = 0.1 * Math.sqrt(s_flow[s]);
+        if (s_flow[s] > 0.5) {
+            let begin_r = mesh.s_begin_r(s),
+                end_r = mesh.s_end_r(s);
+            if (r_elevation[begin_r] - waterLevel < 0 && r_elevation[end_r] - waterLevel < 0) continue;
+            let flow = 0.3 * Math.sqrt(s_flow[s]);
             let inner_t = mesh.s_inner_t(s),
                 outer_t = mesh.s_outer_t(s);
             line_xyz.push(t_xyz.slice(3 * inner_t, 3 * inner_t + 3),
                           t_xyz.slice(3 * outer_t, 3 * outer_t + 3));
             if (flow > 1) flow = 1;
-            let rgba_premultiplied = [0.2 * flow, 0.5 * flow, 0.7 * flow, flow];
+            let rgba_premultiplied = [0.2 * flow, 0.6 * flow, 0.9 * flow, flow];
             line_rgba.push(rgba_premultiplied, rgba_premultiplied);
         }
     }
@@ -747,17 +820,160 @@ function drawRivers(u_projection, mesh, {t_xyz, s_flow}) {
     });
 }
 
+let population = null;
+let draw_cultureOverlay = false;
+let draw_stateBorders = false;
+let _overlayGeom = null;
+let _stateLineGeom = null;
+let _overlayDirty = false;
+
+function buildOverlayGeometry(mesh, populations) {
+  let cultureColors = populations.cultures.map(c => {
+    let hue = (c.i * 0.618033988749895) % 1;
+    let r = hue + 1/3, g = hue, b = hue - 1/3;
+    let sat = 0.7, light = 0.55;
+    function toRgb(t) { t = ((t % 1) + 1) % 1; let c = (1 - Math.abs(2 * light - 1)) * sat; let x = c * (1 - Math.abs((t * 6) % 2 - 1)); let m = light - c / 2; let r, g, b; if (t < 1/6) [r,g,b]=[c,x,0]; else if (t < 2/6) [r,g,b]=[x,c,0]; else if (t < 3/6) [r,g,b]=[0,c,x]; else if (t < 4/6) [r,g,b]=[0,x,c]; else if (t < 5/6) [r,g,b]=[x,0,c]; else [r,g,b]=[c,0,x]; return [r+m, g+m, b+m]; }
+    return toRgb(hue);
+  });
+
+  let {numSides} = mesh;
+  let xyz = new Float32Array(3 * 3 * numSides);
+  let rgb = new Float32Array(3 * 3 * numSides);
+  let {t_xyz, r_xyz} = map;
+
+  for (let s = 0; s < numSides; s++) {
+    let inner_t = mesh.s_inner_t(s), outer_t = mesh.s_outer_t(s), begin_r = mesh.s_begin_r(s);
+    let col = cultureColors[populations.cellCulture[begin_r]] || [0.2, 0.2, 0.2];
+    for (let i = 0; i < 3; i++) { xyz[9 * s + i] = t_xyz[3 * inner_t + i]; xyz[9 * s + 3 + i] = t_xyz[3 * outer_t + i]; xyz[9 * s + 6 + i] = r_xyz[3 * begin_r + i]; }
+    for (let j = 0; j < 3; j++) { for (let i = 0; i < 3; i++) { rgb[9 * s + 3 * j + i] = col[i]; } }
+  }
+
+  _overlayGeom = {xyz, rgb};
+
+  // State border lines
+  let lxyz = [], lrgba = [];
+  for (let s = 0; s < numSides; s++) {
+    let begin_r = mesh.s_begin_r(s), end_r = mesh.s_end_r(s);
+    if (populations.cellState[begin_r] !== populations.cellState[end_r] && populations.cellState[begin_r] >= 0 && populations.cellState[end_r] >= 0) {
+      let inner_t = mesh.s_inner_t(s), outer_t = mesh.s_outer_t(s);
+      let col = [1, 1, 1, 0.8];
+      lxyz.push(t_xyz.slice(3 * inner_t, 3 * inner_t + 3), t_xyz.slice(3 * outer_t, 3 * outer_t + 3));
+      lrgba.push(col, col);
+    }
+  }
+  _stateLineGeom = {xyz: lxyz, rgba: lrgba};
+  _overlayDirty = false;
+}
+
+function drawCultureOverlay(u_projection) {
+  if (!_overlayGeom) return;
+  renderFlatTriangles({u_projection, a_xyz: _overlayGeom.xyz, a_rgb: _overlayGeom.rgb, count: _overlayGeom.xyz.length / 3});
+}
+
+function drawStateBorderLines(u_projection) {
+  if (!_stateLineGeom || _stateLineGeom.xyz.length === 0) return;
+  renderLines({u_projection, u_multiply_rgba: [1, 1, 1, 1], u_add_rgba: [0, 0, 0, 0], a_xyz: _stateLineGeom.xyz, a_rgba: _stateLineGeom.rgba, count: _stateLineGeom.xyz.length});
+}
+
 let _draw_pending = false;
+let _inverseProjection = mat4.create();
+
+window.pickRegion = function(ndcX, ndcY) {
+    if (!mesh || !map.r_xyz) return null;
+
+    let p1 = [ndcX, ndcY, -1, 1];
+    let p2 = [ndcX, ndcY, 1, 1];
+    vec4.transformMat4(p1, p1, _inverseProjection);
+    vec4.transformMat4(p2, p2, _inverseProjection);
+    for (let i = 0; i < 3; i++) {
+        p1[i] /= p1[3];
+        p2[i] /= p2[3];
+    }
+
+    let dir = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]];
+    let a = dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2];
+    let b = 2 * (p1[0]*dir[0] + p1[1]*dir[1] + p1[2]*dir[2]);
+    let c = p1[0]*p1[0] + p1[1]*p1[1] + p1[2]*p1[2] - 1;
+
+    let disc = b*b - 4*a*c;
+    if (disc < 0) return null;
+
+    let t = (-b - Math.sqrt(disc)) / (2*a);
+    if (t < 0) { t = (-b + Math.sqrt(disc)) / (2*a); }
+    if (t < 0) return null;
+
+    let hit = [p1[0] + t*dir[0], p1[1] + t*dir[1], p1[2] + t*dir[2]];
+
+    let bestR = -1, bestDist = Infinity;
+    let numRegions = mesh.numRegions;
+    for (let r = 0; r < numRegions; r++) {
+        let dx = hit[0] - map.r_xyz[3*r];
+        let dy = hit[1] - map.r_xyz[3*r+1];
+        let dz = hit[2] - map.r_xyz[3*r+2];
+        let dist = dx*dx + dy*dy + dz*dz;
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestR = r;
+        }
+    }
+
+    if (bestR === -1) return null;
+
+    let e = map.r_elevation[bestR] - waterLevel;
+    if (e > 0) {
+        e = tempOffset > 0 ? e / (1 + tempOffset * 3) : e * (1 + Math.abs(tempOffset) * 2);
+    }
+    let m = Math.min(1, Math.max(0, map.r_moisture[bestR] + rainOffset));
+    let plate = map.r_plate[bestR];
+    let isOcean = map.plate_is_ocean.has(plate);
+
+    let biome;
+    if (e < 0) {
+        biome = 'Ocean';
+    } else if (e < 0.1) {
+        biome = m > 0.5 ? 'Swamp / Marsh' : 'Coast / Beach';
+    } else if (e < 0.25) {
+        biome = m > 0.6 ? 'Jungle' : m > 0.3 ? 'Forest' : 'Savanna';
+    } else if (e < 0.45) {
+        biome = m > 0.5 ? 'Temperate Forest' : 'Grassland';
+    } else if (e < 0.65) {
+        biome = m > 0.4 ? 'Taiga' : 'Tundra';
+    } else {
+        biome = m > 0.3 ? 'Alpine' : 'Mountain / Snow';
+    }
+
+    let rawElevation = map.r_elevation[bestR];
+    let tempC = e < 0 ? 25 : Math.max(-15, 30 - 45 * e);
+    return {
+        region: bestR,
+        elevation: e,
+        rawElevation: rawElevation,
+        effectiveElevation: e,
+        moisture: m,
+        temperature: tempC,
+        plate: plate,
+        plateType: isOcean ? 'Oceanic' : 'Continental',
+        biome: biome,
+        x: map.r_xyz[3*bestR],
+        y: map.r_xyz[3*bestR+1],
+        z: map.r_xyz[3*bestR+2],
+    };
+};
+
 function _draw() {
     let u_pointsize = 0.1 + 100 / Math.sqrt(N);
     let u_projection = mat4.create();
     mat4.scale(u_projection, u_projection, [1, 1, 0.5, 1]); // avoid clipping
     mat4.rotate(u_projection, u_projection, -rotation, [0.1, 1, 0]);
     mat4.rotate(u_projection, u_projection, -Math.PI/2+0.2, [1, 0, 0]);
+    mat4.invert(_inverseProjection, u_projection);
 
     function r_color_fn(r) {
-        let m = map.r_moisture[r];
-        let e = map.r_elevation[r];
+        let m = Math.min(1, Math.max(0, map.r_moisture[r] + rainOffset));
+        let e = map.r_elevation[r] - waterLevel;
+        if (e > 0) {
+            e = tempOffset > 0 ? e / (1 + tempOffset * 3) : e * (1 + Math.abs(tempOffset) * 2);
+        }
         return [e, m];
     }
 
@@ -770,6 +986,11 @@ function _draw() {
             count: triangleGeometry.xyz.length / 3,
         });
     } else if (drawMode === 'quads') {
+        quadGeometry.applyClimate(
+            mesh.numRegions, mesh.numTriangles,
+            map.r_elevation, map.r_moisture,
+            map.t_elevation, map.t_moisture,
+            tempOffset, rainOffset, waterLevel);
         renderIndexedTriangles({
             u_projection,
             a_xyz: quadGeometry.xyz,
@@ -786,13 +1007,14 @@ function _draw() {
     if (draw_plateBoundaries) {
         drawPlateBoundaries(u_projection, mesh, map);
     }
-    
-    // renderPoints({
-    //     u_projection,
-    //     u_pointsize,
-    //     a_xyz: map.r_xyz,
-    //     count: mesh.numRegions,
-    // });
+
+    if (draw_cultureOverlay && _overlayGeom) {
+        drawCultureOverlay(u_projection);
+    }
+    if (draw_stateBorders && _stateLineGeom) {
+        drawStateBorderLines(u_projection);
+    }
+
     _draw_pending = false;
 }
 
@@ -804,3 +1026,5 @@ function draw() {
 }
 
 generateMesh();
+window._numCultures = 8;
+setTimeout(() => { window.applyPopulation(); }, 100);
