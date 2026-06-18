@@ -1,4 +1,5 @@
 const {default: FlatQueue} = require('flatqueue');
+const aleaPRNG = require('./aleaPRNG-1.1');
 
 const C = 'bcdfghjklmnpqrstvwxz';
 const V = 'aeiouy';
@@ -57,13 +58,18 @@ function generateCultures(mesh, map, suitability, numCultures, rng) {
   let candidates = land.slice().sort(() => rng() - 0.5);
   let minDist = Math.PI / Math.sqrt(numCultures);
 
-  for (let c of candidates) {
-    if (centers.length >= numCultures) break;
-    let tooClose = false;
-    for (let oc of centers) {
-      if (greatCircleDist(map.r_xyz, c, oc) < minDist) { tooClose = true; break; }
+  while (centers.length < numCultures && minDist > 0.001) {
+    for (let c of candidates) {
+      if (centers.length >= numCultures) break;
+      let tooClose = false;
+      for (let oc of centers) {
+        if (greatCircleDist(map.r_xyz, c, oc) < minDist) { tooClose = true; break; }
+      }
+      if (!tooClose) centers.push(c);
     }
-    if (!tooClose) centers.push(c);
+    if (centers.length < numCultures) {
+      minDist *= 0.85;
+    }
   }
 
   for (let i = 0; i < centers.length; i++) {
@@ -123,12 +129,13 @@ function generateCultures(mesh, map, suitability, numCultures, rng) {
     }
   }
 
-  for (let c of cultures) {
-    c.cells = 0;
-    for (let r = 0; r < mesh.numRegions; r++) {
-      if (cellCulture[r] === c.i) c.cells++;
-    }
+  for (let c of cultures) c.cells = 0;
+  for (let r = 0; r < mesh.numRegions; r++) {
+    let ci = cellCulture[r];
+    if (ci >= 0 && ci < cultures.length) cultures[ci].cells++;
   }
+
+  console.log(`[Pop] Culture cells: ${cultures.map(c => `${c.name}:${c.cells}`).join(', ')}`);
 
   return {cultures, cellCulture};
 }
@@ -149,7 +156,7 @@ function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng) {
   scored.sort((a, b) => b.s - a.s);
 
   let numCapitals = Math.min(30, Math.max(3, cultures.length));
-  let numTowns = Math.min(land.length / 5 | 0, 200);
+  let numTowns = Math.min(land.length, 10000);
 
   // Place capitals
   let minDist = Math.PI / Math.sqrt(numCapitals);
@@ -171,17 +178,56 @@ function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng) {
     }
   }
 
-  // Place towns
-  let townMinDist = minDist * 0.5;
+  // Place towns using spatial grid for fast proximity checks
+  let townMinDist = 50 / 6371;
+  let gridRes = Math.max(1, Math.ceil(Math.PI / townMinDist));
+  let cols = gridRes * 2;
+
+  function cellKeyFromR(r) {
+    let x = map.r_xyz[3*r], y = map.r_xyz[3*r+1], z = map.r_xyz[3*r+2];
+    let lat = Math.asin(Math.max(-1, Math.min(1, z)));
+    let lon = Math.atan2(y, x);
+    let row = Math.floor((lat + Math.PI / 2) / Math.PI * gridRes);
+    let col = Math.floor((lon + Math.PI) / (2 * Math.PI) * cols);
+    return row * cols + col;
+  }
+
+  let grid = new Map();
+  for (let i = 0; i < burgs.length; i++) {
+    let key = cellKeyFromR(burgs[i].cell);
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(i);
+  }
+
   for (let s of scored) {
-    if (placed.length >= numCapitals + numTowns) break;
+    if (burgs.length >= numCapitals + numTowns) break;
     if (cellBurg[s.r] >= 0 || cellCulture[s.r] < 0) continue;
+
     let tooClose = false;
-    for (let p of placed) {
-      if (greatCircleDist(map.r_xyz, s.r, p) < townMinDist * (1 + rng())) { tooClose = true; break; }
+    let key = cellKeyFromR(s.r);
+    let col = key % cols;
+    let row = (key - col) / cols;
+
+    outer:
+    for (let dr = -1; dr <= 1; dr++) {
+      let nr = row + dr;
+      if (nr < 0 || nr >= gridRes) continue;
+      for (let dc = -1; dc <= 1; dc++) {
+        let nc = ((col + dc) % cols + cols) % cols;
+        let cell = grid.get(nr * cols + nc);
+        if (!cell) continue;
+        for (let bi of cell) {
+          if (greatCircleDist(map.r_xyz, s.r, burgs[bi].cell) < townMinDist * (1 + rng())) {
+            tooClose = true;
+            break outer;
+          }
+        }
+      }
     }
+
     if (!tooClose) {
-      placed.push(s.r);
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(burgs.length);
       cellBurg[s.r] = burgs.length;
       burgs.push({
         i: burgs.length, cell: s.r, name: randomName(rng),
@@ -196,7 +242,7 @@ function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng) {
 function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng) {
   let states = [];
   let cellState = new Int32Array(mesh.numRegions);
-  cellState.fill(0);
+  cellState.fill(-1);
 
   let capitals = burgs.filter(b => b.capital);
   if (capitals.length === 0) return {states: [], cellState};
@@ -212,6 +258,15 @@ function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng) 
     });
     b.state = states.length - 1;
   }
+
+  // Log expansionism and capital's land neighbor count for each state
+  let out_tmp = [];
+  let stateInfo = states.map(s => {
+    mesh.r_circulate_r(out_tmp, s.center);
+    let landNbrs = out_tmp.filter(nr => map.r_elevation[nr] >= 0).length;
+    return `${s.name}(exp=${s.expansionism.toFixed(2)},cult=${cultures[s.culture]?.name},landNbrs=${landNbrs})`;
+  });
+  console.log(`[Pop] State details: ${stateInfo.join(', ')}`);
 
   // Dijkstra expansion
   let cost = new Float32Array(mesh.numRegions);
@@ -235,12 +290,13 @@ function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng) 
     mesh.r_circulate_r(out_r, r);
     for (let nr of out_r) {
       if (map.r_elevation[nr] < 0) continue;
-      if (cellState[nr] > 0) continue;
+      if (cellState[nr] >= 0) continue;
       let ec = 10;
       if (cellCulture[nr] !== state.culture) ec += 100;
       if (cellBurg[nr] >= 0) ec -= 20;
       let e = map.r_elevation[nr];
       if (e > 0.5) ec += 30;
+      if (ec < 1) ec = 1;
       let total = cc + ec / state.expansionism;
       if (total < 20000 && total < cost[nr]) {
         cost[nr] = total;
@@ -261,12 +317,16 @@ function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng) 
   }
 
   // Gather state statistics
-  for (let s of states) {
-    s.cells = 0;
-    for (let r = 0; r < mesh.numRegions; r++) {
-      if (cellState[r] === s.i) s.cells++;
-    }
+  for (let s of states) s.cells = 0;
+  for (let r = 0; r < mesh.numRegions; r++) {
+    let si = cellState[r];
+    if (si >= 0 && si < states.length) states[si].cells++;
   }
+
+  // Log state+burg counts and capital cultures
+  let capCultures = states.map(s => cultures[s.culture]?.name ?? '?');
+  console.log(`[Pop] State cells: ${states.map(s => `${s.name}:${s.cells}`).join(', ')}`);
+  console.log(`[Pop] Capital cultures: ${capCultures.join(', ')}`);
 
   // Greedy color assignment
   let stateColors = ['#e6194b','#3cb44b','#ffe119','#4363d8','#f58231','#911eb4','#42d4f4','#f032e6','#bfef45','#fabed4','#469990','#dcbeff','#9a6324','#fffac8','#800000','#aaffc3','#808000','#ffd8b1','#000075','#a9a9a9','#e6beff','#ff46b8'];
@@ -276,8 +336,8 @@ function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng) 
       if (cellState[r] !== stateIdx) continue;
       mesh.r_circulate_r(out_r, r);
       for (let nr of out_r) {
-        let ns2 = cellState[nr];
-        if (ns2 > 0 && ns2 !== stateIdx) ns.add(ns2);
+            let ns2 = cellState[nr];
+            if (ns2 >= 0 && ns2 !== stateIdx) ns.add(ns2);
       }
     }
     return [...ns];
@@ -303,7 +363,7 @@ function generateProvinces(mesh, map, states, burgs, cellState, cellBurg, rng) {
     if (sBurgs.length < 2) { stateProvinces[s.i] = []; continue; }
 
     sBurgs.sort((a, b) => (b.capital ? 1 : 0) - (a.capital ? 1 : 0));
-    let numProv = Math.min(sBurgs.length, Math.max(2, sBurgs.length * 0.5 | 0));
+    let numProv = Math.min(sBurgs.length, Math.max(2, sBurgs.length * 0.15 | 0));
     let provSeeds = sBurgs.slice(0, numProv);
 
     for (let b of provSeeds) {
@@ -349,26 +409,40 @@ function generateProvinces(mesh, map, states, burgs, cellState, cellBurg, rng) {
     }
   }
 
-  for (let p of provinces) {
-    for (let r = 0; r < mesh.numRegions; r++) {
-      if (cellProvince[r] === p.i) p.cells++;
-    }
+  for (let p of provinces) p.cells = 0;
+  for (let r = 0; r < mesh.numRegions; r++) {
+    let pi = cellProvince[r];
+    if (pi >= 0 && pi < provinces.length) provinces[pi].cells++;
   }
 
   return {provinces, cellProvince};
 }
 
 function generatePopulation(mesh, map, numCultures, seed) {
-  let rng = function() {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return (seed & 0x7FFFFFFF) / 0x7FFFFFFF;
-  };
+  let t0 = performance.now();
+  let rng = aleaPRNG(seed);
 
   let suitability = computeSuitability(mesh, map);
+  let t1 = performance.now();
+  console.log(`[Pop] Suitability: ${(t1-t0).toFixed(0)}ms`);
+
   let {cultures, cellCulture} = generateCultures(mesh, map, suitability, numCultures, rng);
+  let t2 = performance.now();
+  console.log(`[Pop] Cultures (${cultures.length}): ${(t2-t1).toFixed(0)}ms`);
+
   let {burgs, cellBurg} = generateBurgs(mesh, map, suitability, cultures, cellCulture, rng);
+  let t3 = performance.now();
+  console.log(`[Pop] Burgs (${burgs.length}): ${(t3-t2).toFixed(0)}ms`);
+
   let {states, cellState} = generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng);
+  let t4 = performance.now();
+  console.log(`[Pop] States (${states.length}): ${(t4-t3).toFixed(0)}ms`);
+
   let {provinces, cellProvince} = generateProvinces(mesh, map, states, burgs, cellState, cellBurg, rng);
+  let t5 = performance.now();
+  console.log(`[Pop] Provinces (${provinces.length}): ${(t5-t4).toFixed(0)}ms`);
+
+  console.log(`[Pop] Total: ${(t5-t0).toFixed(0)}ms`);
 
   return {
     cultures, cellCulture,

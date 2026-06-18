@@ -10,11 +10,11 @@ let _seed = 123;
 
 const SimplexNoise = require('simplex-noise');
 const {default: FlatQueue} = require('flatqueue');
-const colormap = require('./colormap');
+const colormap = require('../colormap');
 const {vec3, vec4, mat4} = require('gl-matrix');
 const {makeRandInt, makeRandFloat} = require('@redblobgames/prng');
-const SphereMesh = require('./sphere-mesh');
-const {generatePopulation} = require('./world-population');
+const SphereMesh = require('../sphere-mesh');
+const {generatePopulation} = require('../world-population');
 
 const regl = require('regl')({
     canvas: "#output",

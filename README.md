@@ -11,29 +11,48 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 - **Climate sliders**: temperature (multiplicative on land), rainfall (moisture shift), water level (coastline shift) — all update in real-time
 - **Population generation**: multi-source Dijkstra culture expansion, state formation, burg/settlement placement, province borders
 - **Culture overlay**: flat-color Voronoi regions colored by culture; toggle on/off
-- **State borders**: white border lines between regions belonging to different states; toggle on/off
+- **State overlay**: flat-color regions colored by state; toggle on/off
+- **State borders**: white border lines between different states; toggle on/off
+- **Province overlay**: flat-color regions colored by province; toggle on/off
+- **Province borders**: white border lines between different provinces; toggle on/off
+- **Burg overlay**: settlement dots (towns = white, capitals = gold) with circular sprite texture; toggle on/off
 - **Region info panel**: click any point on the planet to see biome, elevation, moisture, temperature, plate, culture, state, and settlement
-- **Click-drag rotation**: mouse and touch support
+- **Click-drag rotation**: mouse and touch (OrbitControls)
 - **Draw modes**: quads (shaded) and flat (centroid) rendering
 - **Plate visualization**: vectors and boundaries toggleable
 
 ## Architecture
 
+### Three.js version (active)
 ```
-index.html          — SPA layout, controls, picking UI
-planet-generation.js — Main module: mesh gen, map gen, rendering, climate, picking, overlay
+src/main.js          — Entry point, window.* API, Three.js scene init
+src/planet.js        — Simulation: mesh gen, map gen, plates, elevation, rivers, climate
+src/renderer.js      — Three.js scene, camera, materials, draw pipeline, overlay
+src/shaders.js       — Three.js ShaderMaterial: colormap surface, lines, overlays
+colormap-texture.js  — Three.js DataTexture wrapper for biome lookup
+index.html           — SPA layout, controls, canvas (OrbitControls)
+```
+
+### regl version (preserved)
+```
+regl/planet-generation.js — Original regl-based code (unchanged)
+regl/index.html           — Original HTML with manual drag handlers
+```
+
+### Shared
+```
 sphere-mesh.js      — Fibonacci sphere + Delaunay triangulation + jitter
 world-population.js — Culture/state/burg/province generation via Dijkstra
 colormap.js         — 64×64 RGBA biome lookup texture (elevation × moisture)
 server.js           — Bun.js static-file server (port 3333)
-build/_bundle.js    — esbuild output (planet-generation.js + all deps)
 ```
 
 ## Dependencies
 
-- `regl@1.7.0` — WebGL (pinned to v1.7.0; v2.x breaks texture/framebuffer)
+- `three` — WebGL (Three.js renderer)
+- `regl@1.7.0` — WebGL (preserved regl version, pinned)
 - `@redblobgames/dual-mesh` — sphere mesh (Delaunay + Voronoi)
-- `@redblobgames/prng` — seeded PRNG
+- `aleaPRNG-1.1.js` — bundled Alea PRNG (replaces `@redblobgames/prng` in Three.js version)
 - `gl-matrix` — matrix/vector math
 - `delaunator` — Delaunay triangulation
 - `simplex-noise` — 3D noise
@@ -48,8 +67,14 @@ npm install
 
 ## Build
 
+Three.js (default):
 ```bash
-node_modules/.bin/esbuild planet-generation.js --bundle --sourcemap --outfile=build/_bundle.js
+node_modules/.bin/esbuild src/main.js --bundle --sourcemap --outfile=build/_bundle.js
+```
+
+regl (preserved):
+```bash
+node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfile=build/_bundle.regl.js
 ```
 
 ## Run
@@ -59,6 +84,9 @@ Static file server on port 3333:
 ```bash
 bun server.js
 ```
+
+- Three.js version: `http://localhost:3333/`
+- regl version: `http://localhost:3333/regl/index.html`
 
 ## Controls
 
@@ -76,6 +104,10 @@ bun server.js
 | Apply Changes    | Re-run population/culture simulation            |
 | Culture overlay  | Color Voronoi cells by culture                  |
 | State borders    | White lines between different states            |
+| State overlay    | Color regions by state                          |
+| Province overlay | Color regions by province                       |
+| Province borders | White lines between different provinces         |
+| Burg overlay     | Dots for towns and capitals                     |
 | New Planet       | Increment seed + full regeneration + population |
 | Plate vectors    | Show plate movement arrows                      |
 | Plate boundaries | Highlight plate edges                           |
@@ -101,8 +133,16 @@ Names are generated from seeded syllable templates (placeholder for full Azgaar 
 - Rivers skip sides where both endpoints have adjusted elevation < 0 (fully submerged)
 - Sphere mesh has no map edges — Dijkstra expansion wraps seamlessly across all longitudes
 - Mesh jitter caches are cleared on each `makeSphere()` call
-- Overlay geometry is rebuilt only when population changes (`_overlayDirty` flag)
-- regl v1.7.0 only — v2.x has breaking API differences
+- Three.js version uses `ShaderMaterial` with `dFdx`/`dFdy` derivative-based normals and 2D colormap lookup
+- Climate updates set `uv.needsUpdate = true` on the planet geometry (no mesh rebuild needed)
+- Picking uses `Raycaster` for ray-sphere intersection + brute-force nearest-region lookup
+- regl v1.7.0 preserved in `regl/` directory — v2.x has breaking API differences
+- State Dijkstra uses `aleaPRNG` for seeded random generation (replaced LCG in `world-population.js` and `@redblobgames/prng` in `src/planet.js`)
+- State expansion cost clamps to minimum 1 to prevent negative costs from burg discount (`ec -= 20`) cascading via priority queue
+- Culture center placement retries with progressively smaller minDist when insufficient well-spaced land cells exist
+- Burg placement uses spatial grid (`cellKeyFromR` + `Map`) for O(n) proximity checks instead of O(n²)
+- All overlays rebuilt on `applyPopulation()` via `renderer.rebuild*()` calls; visibility toggled via `renderer.toggle*()` calls
+- Burg overlay points are offset radially 1.003× to avoid depth-fighting with the planet surface
 
 ## License
 
