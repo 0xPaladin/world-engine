@@ -175,6 +175,7 @@ exports.getData = function (type) {
         case 'airless': return airlessColormap();
         case 'barren': return barrenColormap();
         case 'hostile': return hostileColormap();
+        case 'gasgiant': return earthlikeColormap();
         default: return earthlikeColormap();
     }
 };

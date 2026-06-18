@@ -54,6 +54,14 @@ canvas#output:active { cursor: grabbing; }
 
 <div class="footer">drag to rotate &middot; click for region info &middot; based on <a href="https://www.redblobgames.com/x/1843-planet-generation/">Red Blob Games</a></div>
 
-<script src="build/_bundle.js"></script>
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module" src="build/_bundle.js"></script>
 </body>
 </html>

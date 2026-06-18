@@ -2,10 +2,12 @@
 
 ## Build
 
+Three.js is loaded via import map in `index.html` (CDN), so esbuild must externalize it.
+
 ### Linux
 ```bash
 # Build Three.js bundle (default)
-node_modules/.bin/esbuild src/main.js --bundle --sourcemap --outfile=build/_bundle.js
+node_modules/.bin/esbuild src/main.js --bundle --sourcemap --format=esm --outfile=build/_bundle.js --external:three --external:three/addons/*
 
 # Build regl bundle (preserved)
 node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfile=build/_bundle.regl.js
@@ -14,7 +16,7 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 ### Windows
 ```powershell
 # Build Three.js bundle (default)
-& "node_modules\@esbuild\win32-x64\esbuild.exe" src/main.js --bundle --sourcemap --outfile=build/_bundle.js
+& "node_modules\@esbuild\win32-x64\esbuild.exe" src/main.js --bundle --sourcemap --format=esm --outfile=build/_bundle.js --external:three --external:three/addons/*
 
 # Build regl bundle (preserved)
 & "node_modules\@esbuild\win32-x64\esbuild.exe" regl/planet-generation.js --bundle --sourcemap --outfile=build/_bundle.regl.js
@@ -48,20 +50,59 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 - `src/main.js` — entry point, window.* API, Three.js scene init, lil-gui controls
 - `src/planet.js` — simulation code: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
 - `src/renderer.js` — Three.js scene, camera, materials, draw pipeline, overlay
-- `src/shaders.js` — Three.js ShaderMaterial: colormap surface, lines, overlays
+- `src/shaders.js` — Three.js ShaderMaterial: colormap surface, lines, overlays, gas giant
 - `colormap-texture.js` — Three.js DataTexture from colormap.js
-- `index.html` — minimal layout: canvas only, lil-gui overlay
-- `build/_bundle.js` — esbuild Three.js + lil-gui output
 
 ### regl version (preserved)
 - `regl/planet-generation.js` — original regl-based code (unchanged)
 - `regl/index.html` — original HTML with drag handlers
 - `build/_bundle.regl.js` — esbuild regl output
 
+## Planet Types
+
+- 5 types: `earthlike` (default), `airless`, `barren`, `hostile`, `gasgiant`
+- Selected via `planetType` dropdown in lil-gui "Planet" folder
+- Switching type calls `planet.setPlanetType()` → `generateMesh()` → `rebuildAll()` → `applyClimate()` → `applyPopulation()`
+- `_planetType` parameter in `planet.js` — `generateMap()` dispatches on a `switch`:
+
+  | Type | Elevation | Plates | Moisture | Rivers | Colormap | Cloud sphere |
+  |---|---|---|---|---|---|---|
+  | earthlike | `assignRegionElevation()` | 50% ocean | FBM [0.15,1] | Yes | green/blue | no |
+  | airless | `generateCraterElevation()` (30–70 craters, bowl+rim+ejecta) | single flat plate | 0 | No | grayscale | no |
+  | barren | plate-collision + volcano boost (1.5–3× on 40% of plate centers) | all continental | FBM [0,0.15] + polar ice | No | red/orange | no |
+  | hostile | plate-collision + volcanic dome constructs (0.3–0.8 added, spread 2–6 regions) | 1.5× plates, all continental | 0 | No | yellow/orange | translucent noise sphere |
+  | gasgiant | zero elevation | single flat plate | 0 | No | earthlike (unused) | no |
+
+- Non-earthlike types skip river generation entirely (`rebuildRivers` returns early)
+- Population is only generated for `earthlike` — `window.applyPopulation` checks `planetType` and clears overlays for other types
+- `pickRegion` returns type-specific biome labels (e.g. "Crater Floor", "Sulfurous Plain", "Gas Giant")
+
+### Gas Giant
+
+- Uses `ShaderMaterial` with a procedural GLSL fragment shader implementing horizontal gas bands, noise-based turbulence, and 3-color mixing
+- Parameters (scale, turbulence, blur, colorA/B/C, seed) exposed via uniforms; updated live from GUI
+- Gas Giant GUI folder (hidden for other types) provides controls: scale, turbulence, blur, colorA/B/C (hex), seed
+- Climate sliders are hidden when `gasgiant` is selected
+- `applyClimate()`, `rebuildRivers()`, and population generation are all skipped for gasgiant
+- Biome label in picker returns "Gas Giant"
+
+### Colormaps
+
+- `colormap.js` exports `getData(type)` returning a 64×64 RGBA `Uint8Array` palette
+- `colormap-texture.js` exports `rebuildColormapTexture(type)` creating a fresh `DataTexture`
+- `renderer.updateColormapTexture(type)` swaps the `u_colormap` uniform on `planetMaterial`
+
+### Cloud Sphere (hostile only)
+
+- `shaders.js` exports `createCloudMaterial(seed)` — generates a 512×256 noise texture via simplex-noise (4 octaves) and wraps it in a `ShaderMaterial`
+- Fragment shader scrolls UV.x over time (`u_time` uniform) for slow rotation
+- `renderer.rebuildCloudSphere(type, seed)` creates a `THREE.Mesh` with `SphereGeometry(1.008, 48, 24)` and cloud material; removed for non-hostile types
+- `u_time` updated each frame in `render()`
+
 ## Climate System
 
 - Temperature slider: multiplicative on land only (`e / (1+temp*3)` for warming, `e * (1+abs(temp)*2)` for cooling)
-- Rainfall slider: additive moisture offset
+- Rainfall slider: additive moisture offset (no-op for types with zero moisture)
 - Water level: subtracts from raw elevation before temperature scaling
 - Biome detection: `applyClimate(mesh, map)` updates UV attribute; `applyPopulation()` re-runs culture sim
 - Three.js: climate updates set `uv.needsUpdate = true` on planet geometry
@@ -82,10 +123,11 @@ window._population = {
 
 - `cellState` uses `-1` sentinel (not `0`) so state index 0 doesn't conflate with "no state"
 - `cellProvince` also uses `-1` sentinel
+- Population only generated for `earthlike` type; `window._population` is `null` for all other types
 
 ## Picking
 
-`window.pickRegion(ndcX, ndcY)` returns `{region, biome, temperature, rawElevation, moisture, plate, plateType}`. Culture/state/burg lookup from `window._population` by region index. Uses Three.js `Raycaster` for ray-sphere intersection.
+`window.pickRegion(ndcX, ndcY)` returns `{region, biome, temperature, rawElevation, moisture, plate, plateType}`. Biome label is type-aware (see Planet Types section). Culture/state/burg lookup from `window._population` by region index. Uses Three.js `Raycaster` for ray-sphere intersection.
 
 ## Overlay Rendering
 
@@ -98,9 +140,11 @@ window._population = {
 - All fill overlays: `transparent: true, opacity: 0.5, depthTest: true, depthWrite: false`
 - Rebuilt on `applyPopulation()` via `renderer.rebuild*()` calls
 - Toggled by `draw_*` flags via `renderer.toggle*()` calls
+- Only rendered for `earthlike` type; all overlays cleared when switching to another type
 
 ## River Rendering
 
 - Rivers skip sides where both endpoints have adjusted elevation < 0
 - Drawn with `THREE.LineSegments`, custom `ShaderMaterial` for premultiplied alpha
 - River color matches shallow water near coastlines
+- Skipped entirely for non-earthlike planet types (`rebuildRivers` early-returns)

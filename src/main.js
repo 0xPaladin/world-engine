@@ -10,10 +10,14 @@ renderer.initRenderer(canvas);
 
 function rebuildAll() {
     const ptype = planet.getPlanetType();
+    if (ptype === 'gasgiant') {
+        renderer.updateGasGiantParams({ seed: PARAMS.seed });
+    }
     renderer.rebuildPlanet(
         planet.mesh, planet.map, planet.quadGeometry,
         planet.getDrawMode(),
-        planet.getTempOffset(), planet.getRainOffset(), planet.getWaterLevel()
+        planet.getTempOffset(), planet.getRainOffset(), planet.getWaterLevel(),
+        ptype
     );
     renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), ptype);
     renderer.rebuildCloudSphere(ptype, planet.getSeed());
@@ -21,6 +25,7 @@ function rebuildAll() {
 }
 
 function applyClimate() {
+    if (planet.getPlanetType() === 'gasgiant') return;
     const mesh = planet.mesh;
     const map = planet.map;
     const quadGeometry = planet.quadGeometry;
@@ -34,10 +39,12 @@ function applyClimate() {
         tempOffset, rainOffset, waterLevel
     );
     renderer.updateClimate(quadGeometry);
+    if (planet.getPlanetType() === 'gasgiant') return;
     if (planet.getDrawMode() === 'centroid') {
         renderer.rebuildPlanet(
             planet.mesh, planet.map, planet.quadGeometry,
-            'centroid', tempOffset, rainOffset, waterLevel
+            'centroid', tempOffset, rainOffset, waterLevel,
+            planet.getPlanetType()
         );
     }
 }
@@ -45,6 +52,15 @@ function applyClimate() {
 /* lil-gui setup */
 
 let _seedCtrl = null;
+
+const GAS_GIANT_DEFAULTS = {
+    scale: 1,
+    turbulence: 2,
+    blur: 0.5,
+    colorA: '#fff8f0',
+    colorB: '#f0e8b0',
+    colorC: '#afa0d0',
+};
 
 const PARAMS = {
     planetType: planet.getPlanetType(),
@@ -66,10 +82,17 @@ const PARAMS = {
     provinceOverlay: planet.getDrawProvinceOverlay(),
     provinceBorders: planet.getDrawProvinceBorders(),
     burgOverlay: planet.getDrawBurgOverlay(),
+    scale: GAS_GIANT_DEFAULTS.scale,
+    turbulence: GAS_GIANT_DEFAULTS.turbulence,
+    blur: GAS_GIANT_DEFAULTS.blur,
+    colorA: GAS_GIANT_DEFAULTS.colorA,
+    colorB: GAS_GIANT_DEFAULTS.colorB,
+    colorC: GAS_GIANT_DEFAULTS.colorC,
     newPlanet: () => {
         const newSeed = planet.getSeed() + 1;
         PARAMS.seed = newSeed;
         planet.setSeed(newSeed);
+        renderer.updateGasGiantParams({ seed: newSeed });
         planet.generateMesh();
         rebuildAll();
         applyClimate();
@@ -84,15 +107,17 @@ const PARAMS = {
 const gui = new GUI({ title: 'Planet Generator', width: 300 });
 
 const fPlanet = gui.addFolder('Planet');
-fPlanet.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'hostile']).name('Planet Type').onChange(v => {
+fPlanet.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'hostile', 'gasgiant']).name('Planet Type').onChange(v => {
     planet.setPlanetType(v);
     planet.generateMesh();
     rebuildAll();
     applyClimate();
     setTimeout(() => window.applyPopulation(), 200);
+    toggleGasGiantUI(v);
 });
 _seedCtrl = fPlanet.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
     planet.setSeed(v);
+    renderer.updateGasGiantParams({ seed: v });
     planet.generateMesh();
     rebuildAll();
     applyClimate();
@@ -124,11 +149,12 @@ const rotationCtrl = fPlanet.add(PARAMS, 'rotation', -5, 5, 0.001).name('Rotatio
 });
 fPlanet.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChange(v => {
     planet.setDrawMode(v);
-    if (!renderer.hasMesh(v)) {
+    if (!renderer.hasMesh(v) && planet.getPlanetType() !== 'gasgiant') {
         renderer.rebuildPlanet(
             planet.mesh, planet.map, planet.quadGeometry,
             v,
-            planet.getTempOffset(), planet.getRainOffset(), planet.getWaterLevel()
+            planet.getTempOffset(), planet.getRainOffset(), planet.getWaterLevel(),
+            planet.getPlanetType()
         );
         renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), planet.getPlanetType());
     }
@@ -152,6 +178,34 @@ fClimate.add(PARAMS, 'waterLevel', -0.5, 0.5, 0.01).name('Water Level').onChange
     renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), planet.getPlanetType());
 });
 fClimate.open();
+
+function updateGasGiant() {
+    renderer.updateGasGiantParams({
+        scale: PARAMS.scale,
+        turbulence: PARAMS.turbulence,
+        blur: PARAMS.blur,
+        colorA: new THREE.Color(PARAMS.colorA),
+        colorB: new THREE.Color(PARAMS.colorB),
+        colorC: new THREE.Color(PARAMS.colorC),
+        seed: PARAMS.seed,
+    });
+}
+
+const fGasGiant = gui.addFolder('Gas Giant');
+fGasGiant.add(PARAMS, 'scale', 0, 4, 0.01).name('Scale').onChange(updateGasGiant);
+fGasGiant.add(PARAMS, 'turbulence', 0, 4, 0.01).name('Turbulence').onChange(updateGasGiant);
+fGasGiant.add(PARAMS, 'blur', 0, 1, 0.01).name('Blur').onChange(updateGasGiant);
+fGasGiant.addColor(PARAMS, 'colorA').name('Color A').onChange(updateGasGiant);
+fGasGiant.addColor(PARAMS, 'colorB').name('Color B').onChange(updateGasGiant);
+fGasGiant.addColor(PARAMS, 'colorC').name('Color C').onChange(updateGasGiant);
+
+function toggleGasGiantUI(type) {
+    const isGG = type === 'gasgiant';
+    fGasGiant.domElement.style.display = isGG ? '' : 'none';
+    fClimate.domElement.style.display = isGG ? 'none' : '';
+}
+
+toggleGasGiantUI(planet.getPlanetType());
 
 const fOverlays = gui.addFolder('Overlays');
 fOverlays.domElement.classList.add('overlays-folder');
@@ -246,11 +300,12 @@ window.setRotation = newRotation => {
 
 window.setDrawMode = newMode => {
     planet.setDrawMode(newMode);
-    if (!renderer.hasMesh(newMode)) {
+    if (!renderer.hasMesh(newMode) && planet.getPlanetType() !== 'gasgiant') {
         renderer.rebuildPlanet(
             planet.mesh, planet.map, planet.quadGeometry,
             newMode,
-            planet.getTempOffset(), planet.getRainOffset(), planet.getWaterLevel()
+            planet.getTempOffset(), planet.getRainOffset(), planet.getWaterLevel(),
+            planet.getPlanetType()
         );
         renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), planet.getPlanetType());
     }
@@ -398,7 +453,9 @@ window.pickRegion = function (ndcX, ndcY) {
 
     const ptype = planet.getPlanetType();
     let biome;
-    if (ptype === 'airless') {
+    if (ptype === 'gasgiant') {
+        biome = 'Gas Giant';
+    } else if (ptype === 'airless') {
         if (e < -0.3) biome = 'Crater Floor';
         else if (e < 0) biome = 'Lowland Basin';
         else if (e < 0.2) biome = 'Mare';

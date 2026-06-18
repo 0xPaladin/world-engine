@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createPlanetSurfaceMaterial, createLineMaterial, createOverlayMaterial, createCloudMaterial } from './shaders.js';
+import { createPlanetSurfaceMaterial, createLineMaterial, createOverlayMaterial, createCloudMaterial, createGasGiantMaterial } from './shaders.js';
 import { generateVoronoiGeometry } from './planet.js';
 import { rebuildColormapTexture } from '../colormap-texture.js';
 
@@ -9,6 +9,8 @@ let planetMaterial, lineMaterial, overlayMaterial;
 
 let quadsMesh = null;
 let centroidMesh = null;
+let gasGiantMesh = null;
+let gasGiantMaterial = null;
 let riversLine = null;
 let plateVectorLines = null;
 let plateBoundaryLines = null;
@@ -69,6 +71,30 @@ export function initRenderer(canvas) {
     _initialized = true;
 }
 
+let _gasGiantParams = {
+    scale: 1,
+    turbulence: 2,
+    blur: 0.5,
+    colorA: new THREE.Color(0xfff8f0),
+    colorB: new THREE.Color(0xf0e8b0),
+    colorC: new THREE.Color(0xafa0d0),
+    seed: 0,
+};
+
+export function updateGasGiantParams(params) {
+    Object.assign(_gasGiantParams, params);
+    if (gasGiantMaterial) {
+        const p = _gasGiantParams;
+        gasGiantMaterial.uniforms.u_scale.value = p.scale;
+        gasGiantMaterial.uniforms.u_turbulence.value = p.turbulence;
+        gasGiantMaterial.uniforms.u_blur.value = p.blur;
+        gasGiantMaterial.uniforms.u_colorA.value.copy(p.colorA);
+        gasGiantMaterial.uniforms.u_colorB.value.copy(p.colorB);
+        gasGiantMaterial.uniforms.u_colorC.value.copy(p.colorC);
+        gasGiantMaterial.uniforms.u_seed.value = p.seed;
+    }
+}
+
 let _clock = new THREE.Clock();
 
 export function render() {
@@ -87,14 +113,28 @@ function removeFromScene(obj) {
     }
 }
 
-export function rebuildPlanet(meshData, mapData, quadGeom, mode, tempOff, rainOff, waterLvl) {
+export function rebuildPlanet(meshData, mapData, quadGeom, mode, tempOff, rainOff, waterLvl, planetType) {
     const _mesh = meshData;
     const _map = mapData;
 
     removeFromScene(quadsMesh);
     removeFromScene(centroidMesh);
+    removeFromScene(gasGiantMesh);
     quadsMesh = null;
     centroidMesh = null;
+    gasGiantMesh = null;
+    gasGiantMaterial = null;
+
+    if (planetType === 'gasgiant') {
+        const p = _gasGiantParams;
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(quadGeom.xyz), 3));
+        geom.setIndex(new THREE.BufferAttribute(new Uint32Array(quadGeom.I), 1));
+        gasGiantMaterial = createGasGiantMaterial(p);
+        gasGiantMesh = new THREE.Mesh(geom, gasGiantMaterial);
+        scene.add(gasGiantMesh);
+        return;
+    }
 
     if (mode === 'quads') {
         const geom = new THREE.BufferGeometry();
@@ -126,6 +166,7 @@ export function rebuildPlanet(meshData, mapData, quadGeom, mode, tempOff, rainOf
 }
 
 export function updateClimate(quadGeom) {
+    if (gasGiantMesh) return;
     if (quadsMesh && quadsMesh.geometry) {
         const uvAttr = quadsMesh.geometry.attributes.uv;
         uvAttr.array.set(quadGeom.tm);
@@ -145,6 +186,7 @@ export function setDrawMode(mode) {
     currentDrawMode = mode;
     if (quadsMesh) quadsMesh.visible = (mode === 'quads');
     if (centroidMesh) centroidMesh.visible = (mode === 'centroid');
+    if (gasGiantMesh) gasGiantMesh.visible = true;
 }
 
 function buildLineGeometryFromArrays(positions, colors) {
@@ -218,6 +260,7 @@ export function rebuildCloudSphere(type, seed) {
 }
 
 export function updateColormapTexture(type) {
+    if (type === 'gasgiant') return;
     const newTexture = rebuildColormapTexture(type);
     if (planetMaterial) {
         if (planetMaterial.uniforms.u_colormap.value) {

@@ -416,6 +416,7 @@ function generateMap() {
         case 'airless': return generateAirlessMap();
         case 'barren': return generateBarrenMap();
         case 'hostile': return generateHostileMap();
+        case 'gasgiant': return generateGasGiantMap();
         default: return generateEarthlikeMap();
     }
 }
@@ -614,6 +615,29 @@ function generateHostileMap() {
             r2 = mesh.s_begin_r(s0 + 1),
             r3 = mesh.s_begin_r(s0 + 2);
         map.t_elevation[t] = (map.r_elevation[r1] + map.r_elevation[r2] + map.r_elevation[r3]) / 3;
+        map.t_moisture[t] = 0;
+    }
+
+    map.t_downflow_s.fill(-999);
+    map.order_t.fill(0);
+    map.t_flow.fill(0);
+    map.s_flow.fill(0);
+
+    quadGeometry.setMap(mesh, map);
+}
+
+function generateGasGiantMap() {
+    map.plate_r = [0];
+    map.r_plate = new Int32Array(mesh.numRegions);
+    map.r_plate.fill(0);
+    map.plate_vec = [vec3.fromValues(0, 0, 0)];
+    map.plate_is_ocean = new Set();
+
+    map.r_elevation.fill(0);
+    map.r_moisture.fill(0);
+
+    for (let t = 0; t < mesh.numTriangles; t++) {
+        map.t_elevation[t] = 0;
         map.t_moisture[t] = 0;
     }
 

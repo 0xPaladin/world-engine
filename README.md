@@ -6,10 +6,11 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 
 ## Features
 
+- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world), and hostile (volcanic/cloud-choked) — each with its own generation pipeline and colormap
 - **Procedural terrain**: tectonic plates, elevation, moisture, temperature, rivers on a Fibonacci sphere mesh
-- **Interactive controls**: seed, region count, plate count, jitter, rotation
-- **Climate sliders**: temperature (multiplicative on land), rainfall (moisture shift), water level (coastline shift) — all update in real-time
-- **Population generation**: multi-source Dijkstra culture expansion, state formation, burg/settlement placement, province borders
+- **Interactive controls**: seed, region count, plate count, jitter, rotation, planet type
+- **Climate sliders**: temperature (multiplicative on land only), rainfall (moisture shift), water level (coastline shift) — all update in real-time
+- **Population generation**: multi-source Dijkstra culture expansion, state formation, burg/settlement placement, province borders (Earth-like only)
 - **Culture overlay**: flat-color Voronoi regions colored by culture; toggle on/off
 - **State overlay**: flat-color regions colored by state; toggle on/off
 - **State borders**: white border lines between different states; toggle on/off
@@ -21,15 +22,26 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 - **Draw modes**: quads (shaded) and flat (centroid) rendering
 - **Plate visualization**: vectors and boundaries toggleable
 
+## Planet Types
+
+| Type       | Colormap      | Elevation model       | Plates | Moisture | Rivers | Population | Atmosphere         |
+| ---------- | ------------- | --------------------- | ------ | -------- | ------ | ---------- | ------------------ |
+| Earth-like | Green/blue    | Plate collision + FBM | Yes    | 0.15–1.0 | Yes    | Yes        | —                  |
+| Airless    | Grayscale     | Craters + FBM baseline | No    | 0        | No     | No         | —                  |
+| Barren     | Red/orange    | Plate + volcano boost | All continental | 0–0.15 | No | Sparse | —                  |
+| Hostile    | Yellow/orange | Plate + volcanic domes | More, smaller | 0 | No | No | Cloud sphere |
+
+Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays.
+
 ## Architecture
 
 ### Three.js version (active)
 ```
-src/main.js          — Entry point, window.* API, Three.js scene init
-src/planet.js        — Simulation: mesh gen, map gen, plates, elevation, rivers, climate
-src/renderer.js      — Three.js scene, camera, materials, draw pipeline, overlay
-src/shaders.js       — Three.js ShaderMaterial: colormap surface, lines, overlays
-colormap-texture.js  — Three.js DataTexture wrapper for biome lookup
+src/main.js          — Entry point, window.* API, Three.js scene init, lil-gui controls
+src/planet.js        — Simulation: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
+src/renderer.js      — Three.js scene, camera, materials, draw pipeline, overlay, cloud sphere
+src/shaders.js       — Three.js ShaderMaterial: colormap surface, lines, overlays, cloud shader
+colormap-texture.js  — Three.js DataTexture wrapper for per-type biome lookup
 index.html           — SPA layout, controls, canvas (OrbitControls)
 ```
 
@@ -43,7 +55,7 @@ regl/index.html           — Original HTML with manual drag handlers
 ```
 sphere-mesh.js      — Fibonacci sphere + Delaunay triangulation + jitter
 world-population.js — Culture/state/burg/province generation via Dijkstra
-colormap.js         — 64×64 RGBA biome lookup texture (elevation × moisture)
+colormap.js         — 64×64 RGBA lookup texture per planet type (elevation × moisture)
 server.js           — Bun.js static-file server (port 3333)
 ```
 
@@ -92,6 +104,7 @@ bun server.js
 
 | Control          | Effect                                          |
 | ---------------- | ----------------------------------------------- |
+| Planet Type      | Earth-like, Airless, Barren, or Hostile         |
 | Seed             | PRNG seed for deterministic generation          |
 | Regions          | Number of Voronoi regions (100–100,000)         |
 | Plates           | Number of tectonic plates (5–100)               |
@@ -100,19 +113,21 @@ bun server.js
 | Temperature      | Multiplicative biome shift on land only         |
 | Rainfall         | Additive moisture shift                         |
 | Water Level      | Elevation offset raising/lowering sea level     |
-| Cultures         | Number of cultures for population gen (2–40)    |
-| Apply Changes    | Re-run population/culture simulation            |
-| Culture overlay  | Color Voronoi cells by culture                  |
-| State borders    | White lines between different states            |
-| State overlay    | Color regions by state                          |
-| Province overlay | Color regions by province                       |
-| Province borders | White lines between different provinces         |
-| Burg overlay     | Dots for towns and capitals                     |
+| Cultures         | Number of cultures for population gen (2–40) ¹  |
+| Apply Changes    | Re-run population/culture simulation ¹          |
+| Culture overlay  | Color Voronoi cells by culture ¹                |
+| State borders    | White lines between different states ¹          |
+| State overlay    | Color regions by state ¹                        |
+| Province overlay | Color regions by province ¹                     |
+| Province borders | White lines between different provinces ¹       |
+| Burg overlay     | Dots for towns and capitals ¹                   |
 | New Planet       | Increment seed + full regeneration + population |
 | Plate vectors    | Show plate movement arrows                      |
 | Plate boundaries | Highlight plate edges                           |
 | Draw Mode        | Quads (shaded) or Flat (centroid)               |
 | Click planet     | Show region info panel                          |
+
+¹ Population/culture/state/province/burg overlays — Earth-like only
 
 ## Population Generation
 
