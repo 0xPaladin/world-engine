@@ -6,9 +6,10 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 
 ## Features
 
-- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world), and hostile (volcanic/cloud-choked) — each with its own generation pipeline and colormap
+- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world), hostile (volcanic/cloud-choked), and gas giant — each with its own generation pipeline and colormap
 - **Procedural terrain**: tectonic plates, elevation, moisture, temperature, rivers on a Fibonacci sphere mesh
-- **Interactive controls**: seed, region count, plate count, jitter, rotation, planet type
+- **Interactive controls**: planet type, seed, region count, plate count, jitter, planet type
+- **Save/Load**: persist all world parameters to browser storage via localforage; name, save, and load worlds
 - **Climate sliders**: temperature (multiplicative on land only), rainfall (moisture shift), water level (coastline shift) — all update in real-time
 - **Population generation**: multi-source Dijkstra culture expansion, state formation, burg/settlement placement, province borders (Earth-like only)
 - **Culture overlay**: flat-color Voronoi regions colored by culture; toggle on/off
@@ -18,7 +19,7 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 - **Province borders**: white border lines between different provinces; toggle on/off
 - **Burg overlay**: settlement dots (towns = white, capitals = gold) with circular sprite texture; toggle on/off
 - **Region info panel**: click any point on the planet to see biome, elevation, moisture, temperature, plate, culture, state, and settlement
-- **Click-drag rotation**: mouse and touch (OrbitControls)
+- **Click-drag rotation**: mouse and touch (OrbitControls); no slider needed
 - **Draw modes**: quads (shaded) and flat (centroid) rendering
 - **Plate visualization**: vectors and boundaries toggleable
 
@@ -30,14 +31,15 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 | Airless    | Grayscale     | Craters + FBM baseline | No    | 0        | No     | No         | —                  |
 | Barren     | Red/orange    | Plate + volcano boost | All continental | 0–0.15 | No | Sparse | —                  |
 | Hostile    | Yellow/orange | Plate + volcanic domes | More, smaller | 0 | No | No | Cloud sphere |
+| Gas Giant  | Procedural    | Zero elevation, bands + noise | — | 0 | No | No | — |
 
-Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays.
+Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays. Gas Giant uses a procedural fragment shader (bands + noise) instead of a mesh-based colormap; the Planet, Climate, and Overlays folders are hidden when selected.
 
 ## Architecture
 
 ### Three.js version (active)
 ```
-src/main.js          — Entry point, window.* API, Three.js scene init, lil-gui controls
+src/main.js          — Entry point, window.* API, Three.js scene init, lil-gui controls, save/load via localforage
 src/planet.js        — Simulation: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
 src/renderer.js      — Three.js scene, camera, materials, draw pipeline, overlay, cloud sphere
 src/shaders.js       — Three.js ShaderMaterial: colormap surface, lines, overlays, cloud shader
@@ -69,6 +71,7 @@ server.js           — Bun.js static-file server (port 3333)
 - `delaunator` — Delaunay triangulation
 - `simplex-noise` — 3D noise
 - `flatqueue` — priority queue (Dijkstra)
+- `localforage` — browser local storage abstraction (save/load)
 - `esbuild` — bundler
 
 ## Setup
@@ -81,7 +84,7 @@ npm install
 
 Three.js (default):
 ```bash
-node_modules/.bin/esbuild src/main.js --bundle --sourcemap --outfile=build/_bundle.js
+node_modules/.bin/esbuild src/main.js --bundle --sourcemap --format=esm --outfile=build/_bundle.js --external:three --external:three/addons/* --external:localforage
 ```
 
 regl (preserved):
@@ -104,12 +107,16 @@ bun server.js
 
 | Control          | Effect                                          |
 | ---------------- | ----------------------------------------------- |
-| Planet Type      | Earth-like, Airless, Barren, or Hostile         |
+| World Name       | Name for saving the current world               |
+| Saved Worlds     | Dropdown of previously saved worlds             |
+| Save World       | Persist all settings to localforage             |
+| Load World       | Restore a saved world                           |
+| Planet Type      | Earth-like, Airless, Barren, Hostile, Gas Giant |
 | Seed             | PRNG seed for deterministic generation          |
+| New Planet       | Increment seed + full regeneration + population |
 | Regions          | Number of Voronoi regions (100–100,000)         |
 | Plates           | Number of tectonic plates (5–100)               |
 | Jitter           | Random perturbation of sphere points            |
-| Rotation         | Camera rotation                                 |
 | Temperature      | Multiplicative biome shift on land only         |
 | Rainfall         | Additive moisture shift                         |
 | Water Level      | Elevation offset raising/lowering sea level     |
@@ -121,7 +128,6 @@ bun server.js
 | Province overlay | Color regions by province ¹                     |
 | Province borders | White lines between different provinces ¹       |
 | Burg overlay     | Dots for towns and capitals ¹                   |
-| New Planet       | Increment seed + full regeneration + population |
 | Plate vectors    | Show plate movement arrows                      |
 | Plate boundaries | Highlight plate edges                           |
 | Draw Mode        | Quads (shaded) or Flat (centroid)               |

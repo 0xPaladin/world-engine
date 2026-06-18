@@ -140,7 +140,9 @@ function generateCultures(mesh, map, suitability, numCultures, rng) {
   return {cultures, cellCulture};
 }
 
-function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng) {
+function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng, maxBurgs, numStates) {
+  if (maxBurgs == null) maxBurgs = 10000;
+  if (numStates == null) numStates = cultures.length;
   let burgs = [];
   let cellBurg = new Int32Array(mesh.numRegions);
   cellBurg.fill(-1);
@@ -155,11 +157,11 @@ function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng) {
   let scored = land.map(r => ({r, s: suitability[r] * (0.5 + rng() * 0.5)}));
   scored.sort((a, b) => b.s - a.s);
 
-  let numCapitals = Math.min(30, Math.max(3, cultures.length));
-  let numTowns = Math.min(land.length, 10000);
+  let numCapitals = Math.min(50, Math.max(3, numStates));
+  let numTowns = Math.max(0, Math.min(land.length, maxBurgs));
 
   // Place capitals
-  let minDist = Math.PI / Math.sqrt(numCapitals);
+  let minDist = 300 / 6371;
   let placed = [];
   for (let s of scored) {
     if (placed.length >= numCapitals) break;
@@ -239,12 +241,13 @@ function generateBurgs(mesh, map, suitability, cultures, cellCulture, rng) {
   return {burgs, cellBurg};
 }
 
-function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng) {
+function generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng, numStates) {
   let states = [];
   let cellState = new Int32Array(mesh.numRegions);
   cellState.fill(-1);
 
   let capitals = burgs.filter(b => b.capital);
+  capitals = capitals.slice(0, numStates);
   if (capitals.length === 0) return {states: [], cellState};
 
   for (let b of capitals) {
@@ -418,7 +421,7 @@ function generateProvinces(mesh, map, states, burgs, cellState, cellBurg, rng) {
   return {provinces, cellProvince};
 }
 
-function generatePopulation(mesh, map, numCultures, seed) {
+function generatePopulation(mesh, map, numCultures, seed, numStates, maxBurgs) {
   let t0 = performance.now();
   let rng = aleaPRNG(seed);
 
@@ -430,11 +433,11 @@ function generatePopulation(mesh, map, numCultures, seed) {
   let t2 = performance.now();
   console.log(`[Pop] Cultures (${cultures.length}): ${(t2-t1).toFixed(0)}ms`);
 
-  let {burgs, cellBurg} = generateBurgs(mesh, map, suitability, cultures, cellCulture, rng);
+  let {burgs, cellBurg} = generateBurgs(mesh, map, suitability, cultures, cellCulture, rng, maxBurgs, numStates);
   let t3 = performance.now();
   console.log(`[Pop] Burgs (${burgs.length}): ${(t3-t2).toFixed(0)}ms`);
 
-  let {states, cellState} = generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng);
+  let {states, cellState} = generateStates(mesh, map, cultures, burgs, cellBurg, cellCulture, rng, numStates);
   let t4 = performance.now();
   console.log(`[Pop] States (${states.length}): ${(t4-t3).toFixed(0)}ms`);
 

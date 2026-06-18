@@ -10,6 +10,7 @@
         "flatqueue": "*",
         "gl-matrix": "*",
         "lil-gui": "^0.21.0",
+        "localforage": "^1.10.0",
         "regl": "1.7.0",
         "simplex-noise": "^2"
     },

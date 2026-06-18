@@ -3,6 +3,7 @@ import * as planet from './planet.js';
 import * as renderer from './renderer.js';
 import { generatePopulation } from '../world-population.js';
 import GUI from 'lil-gui';
+import localforage from 'localforage';
 
 const canvas = document.getElementById('output');
 
@@ -52,6 +53,135 @@ function applyClimate() {
 /* lil-gui setup */
 
 let _seedCtrl = null;
+let _saveNameCtrl = null;
+let _selectedSaveCtrl = null;
+
+function updateAllControllers(g) {
+    g.controllers.forEach(c => c.updateDisplay());
+    g.folders.forEach(f => updateAllControllers(f));
+}
+
+async function refreshSavedNames() {
+    const keys = await localforage.keys();
+    const names = keys.filter(k => k.startsWith('world_')).map(k => k.slice(6));
+    if (_selectedSaveCtrl) {
+        _selectedSaveCtrl.options(names.length > 0 ? names : ['']);
+        if (PARAMS.selectedSave && names.includes(PARAMS.selectedSave)) {
+            _selectedSaveCtrl.setValue(PARAMS.selectedSave);
+        } else {
+            _selectedSaveCtrl.setValue(names.length > 0 ? names[names.length - 1] : '');
+        }
+    }
+    return names;
+}
+
+async function doSave() {
+    const name = PARAMS.worldName.trim();
+    if (!name) return;
+    const data = {
+        planetType: planet.getPlanetType(),
+        seed: planet.getSeed(),
+        regions: planet.getN(),
+        plates: planet.getP(),
+        jitter: planet.getJitter(),
+        drawMode: planet.getDrawMode(),
+        temperature: planet.getTempOffset(),
+        rainfall: planet.getRainOffset(),
+        waterLevel: planet.getWaterLevel(),
+        plateVectors: planet.getDrawPlateVectors(),
+        plateBoundaries: planet.getDrawPlateBoundaries(),
+        cultures: window._numCultures || 16,
+        numStates: window._numStates || 16,
+        maxBurgs: window._maxBurgs || 10000,
+        cultureOverlay: planet.getDrawCultureOverlay(),
+        stateBorders: planet.getDrawStateBorders(),
+        stateOverlay: planet.getDrawStateOverlay(),
+        provinceOverlay: planet.getDrawProvinceOverlay(),
+        provinceBorders: planet.getDrawProvinceBorders(),
+        burgOverlay: planet.getDrawBurgOverlay(),
+        scale: PARAMS.scale,
+        turbulence: PARAMS.turbulence,
+        blur: PARAMS.blur,
+        colorA: PARAMS.colorA,
+        colorB: PARAMS.colorB,
+        colorC: PARAMS.colorC,
+    };
+    await localforage.setItem('world_' + name, data);
+    PARAMS.selectedSave = name;
+    await refreshSavedNames();
+}
+
+async function doLoad() {
+    const name = PARAMS.selectedSave;
+    if (!name) return;
+    const data = await localforage.getItem('world_' + name);
+    if (!data) return;
+
+    planet.setPlanetType(data.planetType);
+    planet.setSeed(data.seed);
+    planet.setN(data.regions);
+    planet.setP(data.plates);
+    planet.setJitter(data.jitter);
+    planet.setDrawMode(data.drawMode);
+    planet.setTempOffset(data.temperature);
+    planet.setRainOffset(data.rainfall);
+    planet.setWaterLevel(data.waterLevel);
+    planet.setDrawPlateVectors(data.plateVectors);
+    planet.setDrawPlateBoundaries(data.plateBoundaries);
+    window._numCultures = data.cultures;
+    window._numStates = data.numStates;
+    window._maxBurgs = data.maxBurgs;
+    planet.setDrawCultureOverlay(data.cultureOverlay);
+    planet.setDrawStateBorders(data.stateBorders);
+    planet.setDrawStateOverlay(data.stateOverlay);
+    planet.setDrawProvinceOverlay(data.provinceOverlay);
+    planet.setDrawProvinceBorders(data.provinceBorders);
+    planet.setDrawBurgOverlay(data.burgOverlay);
+
+    PARAMS.planetType = data.planetType;
+    PARAMS.seed = data.seed;
+    PARAMS.regions = data.regions;
+    PARAMS.plates = data.plates;
+    PARAMS.jitter = data.jitter;
+    PARAMS.drawMode = data.drawMode;
+    PARAMS.temperature = data.temperature;
+    PARAMS.rainfall = data.rainfall;
+    PARAMS.waterLevel = data.waterLevel;
+    PARAMS.plateVectors = data.plateVectors;
+    PARAMS.plateBoundaries = data.plateBoundaries;
+    PARAMS.cultures = data.cultures;
+    PARAMS.numStates = data.numStates;
+    PARAMS.maxBurgs = data.maxBurgs;
+    PARAMS.cultureOverlay = data.cultureOverlay;
+    PARAMS.stateBorders = data.stateBorders;
+    PARAMS.stateOverlay = data.stateOverlay;
+    PARAMS.provinceOverlay = data.provinceOverlay;
+    PARAMS.provinceBorders = data.provinceBorders;
+    PARAMS.burgOverlay = data.burgOverlay;
+    PARAMS.scale = data.scale;
+    PARAMS.turbulence = data.turbulence;
+    PARAMS.blur = data.blur;
+    PARAMS.colorA = data.colorA;
+    PARAMS.colorB = data.colorB;
+    PARAMS.colorC = data.colorC;
+    PARAMS.worldName = name;
+
+    renderer.updateGasGiantParams({
+        scale: data.scale,
+        turbulence: data.turbulence,
+        blur: data.blur,
+        colorA: new THREE.Color(data.colorA),
+        colorB: new THREE.Color(data.colorB),
+        colorC: new THREE.Color(data.colorC),
+        seed: data.seed,
+    });
+    planet.generateMesh();
+    rebuildAll();
+    applyClimate();
+    setTimeout(() => window.applyPopulation(), 200);
+    toggleGasGiantUI(data.planetType);
+    updateAllControllers(gui);
+}
 
 const GAS_GIANT_DEFAULTS = {
     scale: 1,
@@ -63,12 +193,15 @@ const GAS_GIANT_DEFAULTS = {
 };
 
 const PARAMS = {
+    worldName: 'My World',
+    selectedSave: '',
+    saveWorld: doSave,
+    loadWorld: doLoad,
     planetType: planet.getPlanetType(),
     seed: planet.getSeed(),
     regions: planet.getN(),
     plates: planet.getP(),
     jitter: planet.getJitter(),
-    rotation: planet.getRotation(),
     temperature: planet.getTempOffset(),
     rainfall: planet.getRainOffset(),
     waterLevel: planet.getWaterLevel(),
@@ -76,6 +209,8 @@ const PARAMS = {
     plateVectors: planet.getDrawPlateVectors(),
     plateBoundaries: planet.getDrawPlateBoundaries(),
     cultures: window._numCultures || 16,
+    numStates: window._numStates || 16,
+    maxBurgs: window._maxBurgs || 10000,
     cultureOverlay: planet.getDrawCultureOverlay(),
     stateBorders: planet.getDrawStateBorders(),
     stateOverlay: planet.getDrawStateOverlay(),
@@ -106,8 +241,7 @@ const PARAMS = {
 
 const gui = new GUI({ title: 'Planet Generator', width: 300 });
 
-const fPlanet = gui.addFolder('Planet');
-fPlanet.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'hostile', 'gasgiant']).name('Planet Type').onChange(v => {
+gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'hostile', 'gasgiant']).name('Planet Type').onChange(v => {
     planet.setPlanetType(v);
     planet.generateMesh();
     rebuildAll();
@@ -115,7 +249,7 @@ fPlanet.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'hostile', 
     setTimeout(() => window.applyPopulation(), 200);
     toggleGasGiantUI(v);
 });
-_seedCtrl = fPlanet.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
+_seedCtrl = gui.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
     planet.setSeed(v);
     renderer.updateGasGiantParams({ seed: v });
     planet.generateMesh();
@@ -123,6 +257,14 @@ _seedCtrl = fPlanet.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v =>
     applyClimate();
     setTimeout(() => window.applyPopulation(), 200);
 });
+gui.add(PARAMS, 'newPlanet').name('New Planet');
+
+_saveNameCtrl = gui.add(PARAMS, 'worldName').name('World Name');
+_selectedSaveCtrl = gui.add(PARAMS, 'selectedSave', ['']).name('Saved Worlds');
+gui.add(PARAMS, 'saveWorld').name('Save World');
+gui.add(PARAMS, 'loadWorld').name('Load World');
+
+const fPlanet = gui.addFolder('Planet');
 fPlanet.add(PARAMS, 'regions', 100, 100000, 100).name('Regions').onChange(v => {
     planet.setN(v);
     planet.generateMesh();
@@ -143,10 +285,6 @@ fPlanet.add(PARAMS, 'jitter', 0, 1, 0.001).name('Jitter').onChange(v => {
     applyClimate();
     setTimeout(() => window.applyPopulation(), 200);
 });
-const rotationCtrl = fPlanet.add(PARAMS, 'rotation', -5, 5, 0.001).name('Rotation').onChange(v => {
-    planet.setRotation(v);
-    renderer.setCameraRotation(v);
-});
 fPlanet.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChange(v => {
     planet.setDrawMode(v);
     if (!renderer.hasMesh(v) && planet.getPlanetType() !== 'gasgiant') {
@@ -160,7 +298,6 @@ fPlanet.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChang
     }
     renderer.setDrawMode(v);
 });
-fPlanet.add(PARAMS, 'newPlanet').name('New Planet');
 fPlanet.open();
 
 const fClimate = gui.addFolder('Climate');
@@ -198,14 +335,6 @@ fGasGiant.add(PARAMS, 'blur', 0, 1, 0.01).name('Blur').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorA').name('Color A').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorB').name('Color B').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorC').name('Color C').onChange(updateGasGiant);
-
-function toggleGasGiantUI(type) {
-    const isGG = type === 'gasgiant';
-    fGasGiant.domElement.style.display = isGG ? '' : 'none';
-    fClimate.domElement.style.display = isGG ? 'none' : '';
-}
-
-toggleGasGiantUI(planet.getPlanetType());
 
 const fOverlays = gui.addFolder('Overlays');
 fOverlays.domElement.classList.add('overlays-folder');
@@ -247,6 +376,12 @@ const fPopulation = gui.addFolder('Population');
 fPopulation.add(PARAMS, 'cultures', 2, 40, 1).name('Cultures').onChange(v => {
     window._numCultures = v;
 });
+fPopulation.add(PARAMS, 'numStates', 1, 50, 1).name('States').onChange(v => {
+    window._numStates = v;
+});
+fPopulation.add(PARAMS, 'maxBurgs', 100, 50000, 100).name('Max Burgs').onChange(v => {
+    window._maxBurgs = v;
+});
 fPopulation.add(PARAMS, 'applyPopulation').name('Apply Changes');
 fPopulation.open();
 
@@ -257,6 +392,17 @@ const infoContent = document.createElement('div');
 infoContent.style.cssText = 'padding:6px 8px;font-size:11px;line-height:1.6;color:#aaa;min-height:40px;white-space:pre-wrap;overflow-wrap:break-word;';
 infoContent.textContent = 'Click planet for region info';
 fInfo.domElement.appendChild(infoContent);
+
+function toggleGasGiantUI(type) {
+    const isGG = type === 'gasgiant';
+    fGasGiant.domElement.style.display = isGG ? '' : 'none';
+    const hideClimate = isGG || type === 'airless';
+    fClimate.domElement.style.display = hideClimate ? 'none' : '';
+    fPlanet.domElement.style.display = isGG ? 'none' : '';
+    fOverlays.domElement.style.display = isGG ? 'none' : '';
+}
+
+toggleGasGiantUI(planet.getPlanetType());
 
 /* expose the same window.* API as the regl version */
 
@@ -383,7 +529,7 @@ window.applyPopulation = () => {
         renderer.rebuildBurgOverlay(null, null, null);
         return;
     }
-    const population = generatePopulation(planet.mesh, planet.map, window._numCultures || 8, planet.getSeed());
+    const population = generatePopulation(planet.mesh, planet.map, window._numCultures || 8, planet.getSeed(), window._numStates || 16, window._maxBurgs || 10000);
     window._population = population;
     renderer.rebuildOverlay(planet.mesh, population, planet.map);
     renderer.rebuildStateOverlay(planet.mesh, population, planet.map);
@@ -551,6 +697,7 @@ rebuildAll();
 applyClimate();
 renderer.setCameraRotation(planet.getRotation());
 renderer.render();
+refreshSavedNames();
 
 /* Start render loop */
 function animate() {
@@ -560,15 +707,8 @@ function animate() {
 requestAnimationFrame(animate);
 
 window._numCultures = 16;
-
-/* Sync OrbitControls rotation back to GUI */
-renderer.getControls().addEventListener('change', () => {
-    const angle = renderer.getControls().azimuthAngle;
-    const rot = -angle;
-    planet.setRotation(rot);
-    PARAMS.rotation = rot;
-    rotationCtrl.updateDisplay();
-});
+window._numStates = 16;
+window._maxBurgs = 10000;
 
 setTimeout(() => { window.applyPopulation(); }, 100);
 

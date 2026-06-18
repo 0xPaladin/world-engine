@@ -47,7 +47,7 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 - `aleaPRNG-1.1.js` — Alea PRNG (seeded, good statistical properties)
 
 ### Three.js version (active)
-- `src/main.js` — entry point, window.* API, Three.js scene init, lil-gui controls
+- `src/main.js` — entry point, window.* API, Three.js scene init, lil-gui controls, save/load via localforage
 - `src/planet.js` — simulation code: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
 - `src/renderer.js` — Three.js scene, camera, materials, draw pipeline, overlay
 - `src/shaders.js` — Three.js ShaderMaterial: colormap surface, lines, overlays, gas giant
@@ -61,8 +61,9 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 ## Planet Types
 
 - 5 types: `earthlike` (default), `airless`, `barren`, `hostile`, `gasgiant`
-- Selected via `planetType` dropdown in lil-gui "Planet" folder
+- Selected via `planetType` dropdown at top level of lil-gui
 - Switching type calls `planet.setPlanetType()` → `generateMesh()` → `rebuildAll()` → `applyClimate()` → `applyPopulation()`
+- Planet and Overlays folders hidden when `gasgiant` selected; Climate folder hidden for `gasgiant` and `airless`
 - `_planetType` parameter in `planet.js` — `generateMap()` dispatches on a `switch`:
 
   | Type | Elevation | Plates | Moisture | Rivers | Colormap | Cloud sphere |
@@ -141,6 +142,15 @@ window._population = {
 - Rebuilt on `applyPopulation()` via `renderer.rebuild*()` calls
 - Toggled by `draw_*` flags via `renderer.toggle*()` calls
 - Only rendered for `earthlike` type; all overlays cleared when switching to another type
+
+## Save / Load
+
+- `localforage` used for persistent browser storage of world settings
+- Each save stored under key `world_<name>` containing all planet parameters (type, seed, regions, plates, jitter, draw mode, climate, overlays, gas giant params, culture count)
+- World name input, Saved Worlds dropdown, Save/Load buttons at top level of lil-gui
+- `refreshSavedNames()` queries localforage keys and updates dropdown options
+- `doSave()` serializes current planet state to localforage
+- `doLoad()` reads a save, applies all settings via planet setters, regenerates mesh, rebuilds rendering, and syncs all GUI controllers via `updateAllControllers()`
 
 ## River Rendering
 
