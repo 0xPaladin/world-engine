@@ -1,11 +1,16 @@
 # Agent Conventions
 
-## Build & Verify
-
+## Build 
 ```bash
 # Build bundle
 node_modules/.bin/esbuild planet-generation.js --bundle --sourcemap --outfile=build/_bundle.js
+```
 
+## Production Build
+
+As build but also...
+
+```bash
 # Restart server after build
 sudo systemctl restart world-engine
 
@@ -16,12 +21,11 @@ systemctl status world-engine --no-pager -l
 journalctl -u world-engine -n 50 --no-pager
 ```
 
-## Server
+### Server
 
 - Static file server on port 3333 (`bun server.js`)
 - Reverse-proxied by nginx at `/world/` on paladin10.info
 - Service file: `/etc/systemd/system/world-engine.service`
-- Systemd password for sudo: `Renovator-Canister0-Lyricism-Dust-Spirited`
 
 ## Code Style
 

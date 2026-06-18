@@ -2,11 +2,7 @@
 
 Procedural planet generation on a sphere with interactive climate control, culture simulation, and WebGL rendering.
 
-Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.com/x/1843-planet-generation/) experiment. Extended with culture/state population generation, climate sliders, and an interactive SPA.
-
-## Live Demo
-
-https://paladin10.info/world/
+Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.com/x/1843-planet-generation/) experiment. Extended with culture/state population generation, climate sliders from [Azgaar's Fantasy Map Generator](https://github.com/Azgaar/Fantasy-Map-Generator). All part of an interactive SPA.
 
 ## Features
 
@@ -64,35 +60,27 @@ Static file server on port 3333:
 bun server.js
 ```
 
-### Production (systemd)
-
-```bash
-systemctl --user start world-engine
-```
-
-Nginx reverse-proxies `/world/` at paladin10.info to `127.0.0.1:3333`.
-
 ## Controls
 
-| Control | Effect |
-|---|---|
-| Seed | PRNG seed for deterministic generation |
-| Regions | Number of Voronoi regions (100–100,000) |
-| Plates | Number of tectonic plates (5–100) |
-| Jitter | Random perturbation of sphere points |
-| Rotation | Camera rotation |
-| Temperature | Multiplicative biome shift on land only |
-| Rainfall | Additive moisture shift |
-| Water Level | Elevation offset raising/lowering sea level |
-| Cultures | Number of cultures for population gen (2–40) |
-| Apply Changes | Re-run population/culture simulation |
-| Culture overlay | Color Voronoi cells by culture |
-| State borders | White lines between different states |
-| New Planet | Increment seed + full regeneration + population |
-| Plate vectors | Show plate movement arrows |
-| Plate boundaries | Highlight plate edges |
-| Draw Mode | Quads (shaded) or Flat (centroid) |
-| Click planet | Show region info panel |
+| Control          | Effect                                          |
+| ---------------- | ----------------------------------------------- |
+| Seed             | PRNG seed for deterministic generation          |
+| Regions          | Number of Voronoi regions (100–100,000)         |
+| Plates           | Number of tectonic plates (5–100)               |
+| Jitter           | Random perturbation of sphere points            |
+| Rotation         | Camera rotation                                 |
+| Temperature      | Multiplicative biome shift on land only         |
+| Rainfall         | Additive moisture shift                         |
+| Water Level      | Elevation offset raising/lowering sea level     |
+| Cultures         | Number of cultures for population gen (2–40)    |
+| Apply Changes    | Re-run population/culture simulation            |
+| Culture overlay  | Color Voronoi cells by culture                  |
+| State borders    | White lines between different states            |
+| New Planet       | Increment seed + full regeneration + population |
+| Plate vectors    | Show plate movement arrows                      |
+| Plate boundaries | Highlight plate edges                           |
+| Draw Mode        | Quads (shaded) or Flat (centroid)               |
+| Click planet     | Show region info panel                          |
 
 ## Population Generation
 
