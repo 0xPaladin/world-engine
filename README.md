@@ -6,7 +6,7 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 
 ## Features
 
-- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world), hostile (volcanic/cloud-choked), and gas giant — each with its own generation pipeline and colormap
+- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world with barren/hostile subtype), and gas giant — each with its own generation pipeline and colormap
 - **Procedural terrain**: tectonic plates, elevation, moisture, temperature, rivers on a Fibonacci sphere mesh
 - **Interactive controls**: planet type, seed, region count, plate count, jitter, planet type
 - **Save/Load**: persist all world parameters to browser storage via localforage; name, save, and load worlds
@@ -25,13 +25,16 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 
 ## Planet Types
 
-| Type       | Colormap      | Elevation model       | Plates | Moisture | Rivers | Population | Atmosphere         |
-| ---------- | ------------- | --------------------- | ------ | -------- | ------ | ---------- | ------------------ |
-| Earth-like | Green/blue    | Plate collision + FBM | Yes    | 0.15–1.0 | Yes    | Yes        | —                  |
-| Airless    | Grayscale     | Craters + FBM baseline | No    | 0        | No     | No         | —                  |
-| Barren     | Red/orange    | Plate + volcano boost | All continental | 0–0.15 | No | Sparse | —                  |
-| Hostile    | Yellow/orange | Plate + volcanic domes | More, smaller | 0 | No | No | Cloud sphere |
-| Gas Giant  | Procedural    | Zero elevation, bands + noise | — | 0 | No | No | — |
+| Type       | Colormap        | Elevation model       | Plates | Moisture | Rivers | Population | Cloud sphere |
+| ---------- | --------------- | --------------------- | ------ | -------- | ------ | ---------- | ------------ |
+| Earth-like | Green/blue      | Plate collision + FBM | Yes    | 0.15–1.0 | Yes    | Yes        | no |
+| Airless    | Grayscale (user-colorable) | Craters + FBM baseline | No    | 0        | No     | No         | no |
+| Barren     | Red/orange (user-colorable) | Plate + volcano boost or volcanic domes (per subtype) | All continental | 0–0.15 | No | No | only when subtype=hostile |
+| Gas Giant  | Procedural      | Zero elevation, bands + noise | — | 0 | No | No | no |
+
+Barren has a **subtype** dropdown (barren/hostile) accessible via the "Barren Type" folder:
+- **barren subtype**: volcano-boosted elevation (1.5–3× on 40% of plate centers), trace moisture with polar ice, red/orange palette
+- **hostile subtype**: volcanic dome elevation constructs, zero moisture, yellow/orange biomes, translucent noise cloud sphere
 
 Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays. Gas Giant uses a procedural fragment shader (bands + noise) instead of a mesh-based colormap; the Planet, Climate, and Overlays folders are hidden when selected.
 
@@ -111,7 +114,7 @@ bun server.js
 | Saved Worlds     | Dropdown of previously saved worlds             |
 | Save World       | Persist all settings to localforage             |
 | Load World       | Restore a saved world                           |
-| Planet Type      | Earth-like, Airless, Barren, Hostile, Gas Giant |
+| Planet Type      | Earth-like, Airless, Barren, Gas Giant          |
 | Seed             | PRNG seed for deterministic generation          |
 | New Planet       | Increment seed + full regeneration + population |
 | Regions          | Number of Voronoi regions (100–100,000)         |
@@ -120,6 +123,9 @@ bun server.js
 | Temperature      | Multiplicative biome shift on land only         |
 | Rainfall         | Additive moisture shift                         |
 | Water Level      | Elevation offset raising/lowering sea level     |
+| Barren Subtype   | Barren or Hostile (terrain + biome variant) ²   |
+| Barren Colors A/B/C | Three user-colorable elevation stops (low/mid/high) ² |
+| Airless Colors A/B/C | Three user-colorable elevation stops (low/mid/high) ³ |
 | Cultures         | Number of cultures for population gen (2–40) ¹  |
 | Apply Changes    | Re-run population/culture simulation ¹          |
 | Culture overlay  | Color Voronoi cells by culture ¹                |
@@ -134,6 +140,8 @@ bun server.js
 | Click planet     | Show region info panel                          |
 
 ¹ Population/culture/state/province/burg overlays — Earth-like only
+² Barren type folder — visible only when Planet Type is Barren
+³ Airless Colors folder — visible only when Planet Type is Airless
 
 ## Population Generation
 

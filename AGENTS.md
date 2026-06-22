@@ -60,7 +60,7 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 
 ## Planet Types
 
-- 5 types: `earthlike` (default), `airless`, `barren`, `hostile`, `gasgiant`
+- 4 types: `earthlike` (default), `airless`, `barren`, `gasgiant`
 - Selected via `planetType` dropdown at top level of lil-gui
 - Switching type calls `planet.setPlanetType()` → `generateMesh()` → `rebuildAll()` → `applyClimate()` → `applyPopulation()`
 - Planet and Overlays folders hidden when `gasgiant` selected; Climate folder hidden for `gasgiant` and `airless`
@@ -68,15 +68,21 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 
   | Type | Elevation | Plates | Moisture | Rivers | Colormap | Cloud sphere |
   |---|---|---|---|---|---|---|
-  | earthlike | `assignRegionElevation()` | 50% ocean | FBM [0.15,1] | Yes | green/blue | no |
-  | airless | `generateCraterElevation()` (30–70 craters, bowl+rim+ejecta) | single flat plate | 0 | No | grayscale | no |
-  | barren | plate-collision + volcano boost (1.5–3× on 40% of plate centers) | all continental | FBM [0,0.15] + polar ice | No | red/orange | no |
-  | hostile | plate-collision + volcanic dome constructs (0.3–0.8 added, spread 2–6 regions) | 1.5× plates, all continental | 0 | No | yellow/orange | translucent noise sphere |
+  | earthlike | `assignRegionElevation()` | 50% ocean | FBM [0.15,1] | Yes | earthlike | no |
+  | airless | `generateCraterElevation()` (30–70 craters, bowl+rim+ejecta) | single flat plate | 0 | No | airless (user-colorable) | no |
+  | barren | plate-collision + volcano boost or dome constructs via subtype | all continental | 0–0.15 | No | barren (user-colorable) | only when subtype=hostile |
   | gasgiant | zero elevation | single flat plate | 0 | No | earthlike (unused) | no |
+
+### Barren Subtype
+
+- Barren has a `_barrenSubtype` parameter (`'barren'` or `'hostile'`) selectable via a dropdown in the "Barren Type" folder
+- `'barren'` subtype: plate-collision + volcano boost (1.5–3× on 40% of plate centers); moisture FBM [0,0.15] + polar ice; biome labels: Depression/Lowland Plain/Volcanic Rise/Highland/Polar Cap
+- `'hostile'` subtype: plate-collision + volcanic dome constructs (0.3–0.8 added, spread 2–6 regions); 1.5× plates, all continental, 0 moisture; biome labels: Rift Basin/Sulfurous Plain/Volcanic Dome/Tessera Highland/Mountain; translucent noise cloud sphere created if subtype=hostile
+- Subtype change triggers full regeneration (mesh + map + colormap + clouds)
 
 - Non-earthlike types skip river generation entirely (`rebuildRivers` returns early)
 - Population is only generated for `earthlike` — `window.applyPopulation` checks `planetType` and clears overlays for other types
-- `pickRegion` returns type-specific biome labels (e.g. "Crater Floor", "Sulfurous Plain", "Gas Giant")
+- `pickRegion` returns type-and-subtype-specific biome labels (e.g. "Crater Floor", "Sulfurous Plain", "Gas Giant")
 
 ### Gas Giant
 
@@ -89,15 +95,19 @@ node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfi
 
 ### Colormaps
 
-- `colormap.js` exports `getData(type)` returning a 64×64 RGBA `Uint8Array` palette
-- `colormap-texture.js` exports `rebuildColormapTexture(type)` creating a fresh `DataTexture`
+- `colormap.js` exports `getData(type, colorA?, colorB?, colorC?)` returning a 64×64 RGBA `Uint8Array` palette
+- `airlessColormap()` and `barrenColormap()` accept 3 hex color strings and blend them across elevation using `lerpColor()`
+- `earthlikeColormap()` uses fixed hardcoded values (unchanged)
+- Default colors match the previous hardcoded appearance for backward compatibility
+- `colormap-texture.js` exports `rebuildColormapTexture(type, colorA?, colorB?, colorC?)` creating a fresh `DataTexture`
 - `renderer.updateColormapTexture(type)` swaps the `u_colormap` uniform on `planetMaterial`
+- `renderer.updateColormapColors(type, {colorA, colorB, colorC})` regenerates the colormap texture with user colors and swaps it on `planetMaterial`
 
-### Cloud Sphere (hostile only)
+### Cloud Sphere (barren hostile subtype only)
 
 - `shaders.js` exports `createCloudMaterial(seed)` — generates a 512×256 noise texture via simplex-noise (4 octaves) and wraps it in a `ShaderMaterial`
 - Fragment shader scrolls UV.x over time (`u_time` uniform) for slow rotation
-- `renderer.rebuildCloudSphere(type, seed)` creates a `THREE.Mesh` with `SphereGeometry(1.008, 48, 24)` and cloud material; removed for non-hostile types
+- `renderer.rebuildCloudSphere(type, seed, barrenSubtype?)` creates a `THREE.Mesh` with `SphereGeometry(1.008, 48, 24)` and cloud material; created only when type=barren and barrenSubtype=hostile
 - `u_time` updated each frame in `render()`
 
 ## Climate System
@@ -146,11 +156,11 @@ window._population = {
 ## Save / Load
 
 - `localforage` used for persistent browser storage of world settings
-- Each save stored under key `world_<name>` containing all planet parameters (type, seed, regions, plates, jitter, draw mode, climate, overlays, gas giant params, culture count)
+- Each save stored under key `world_<name>` containing all planet parameters (type, seed, regions, plates, jitter, draw mode, climate, overlays, gas giant params, barren subtype, barren color triple, airless color triple, culture count)
 - World name input, Saved Worlds dropdown, Save/Load buttons at top level of lil-gui
 - `refreshSavedNames()` queries localforage keys and updates dropdown options
 - `doSave()` serializes current planet state to localforage
-- `doLoad()` reads a save, applies all settings via planet setters, regenerates mesh, rebuilds rendering, and syncs all GUI controllers via `updateAllControllers()`
+- `doLoad()` reads a save, applies all settings via planet setters, regenerates mesh, rebuilds rendering, restores colormap colors for barren and airless, and syncs all GUI controllers via `updateAllControllers()`
 
 ## River Rendering
 
