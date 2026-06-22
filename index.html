@@ -1,68 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Planet Generator</title>
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: #0a0e14;
-  color: #b3b1ad;
-  font-family: system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1rem;
-}
-h1 {
-  color: #e6e1cf;
-  font-weight: 300;
-  font-size: 1.5rem;
-  letter-spacing: 0.05em;
-  margin-bottom: 1rem;
-}
-canvas#output {
-  display: block;
-  width: min(65vw, 65vh, 700px);
-  height: min(65vw, 65vh, 700px);
-  cursor: grab;
-}
-canvas#output:active { cursor: grabbing; }
-.footer {
-  margin-top: 1rem;
-  font-size: 0.75rem;
-  color: #555;
-}
-.footer a { color: #6fa8dc; }
-.lil-gui.overlays-folder > .lil-children {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-}
-.lil-gui.overlays-folder > .lil-children > .lil-controller {
-    border: none;
-    margin: 1px 0;
-}
-</style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Planet Generator</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0a0e14;
+            color: #b3b1ad;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem;
+        }
+
+        h1 {
+            color: #e6e1cf;
+            font-weight: 300;
+            font-size: 1.5rem;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        canvas#output {
+            display: block;
+            width: min(65vw, 65vh, 700px);
+            height: min(65vw, 65vh, 700px);
+            cursor: grab;
+        }
+
+        canvas#output:active {
+            cursor: grabbing;
+        }
+
+        .footer {
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: #555;
+        }
+
+        .footer a {
+            color: #6fa8dc;
+        }
+
+        .lil-gui.overlays-folder>.lil-children {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .lil-gui.overlays-folder>.lil-children>.lil-controller {
+            border: none;
+            margin: 1px 0;
+        }
+
+
+        .flex>.lil-children {
+            display: flex;
+            flex: auto;
+        }
+
+        .w-70 {
+            width: 70%;
+        }
+
+        .w-50 {
+            width: 50%;
+        }
+
+        .w-30 {
+            width: 30%;
+        }
+    </style>
 </head>
+
 <body>
 
-<h1>Planet Generator</h1>
+    <h1>Planet Generator</h1>
 
-<canvas id="output" width="1024" height="1024"></canvas>
+    <canvas id="output" width="1024" height="1024"></canvas>
 
-<div class="footer">drag to rotate &middot; click for region info &middot; based on <a href="https://www.redblobgames.com/x/1843-planet-generation/">Red Blob Games</a></div>
+    <div class="footer">drag to rotate &middot; click for region info &middot; based on <a
+            href="https://www.redblobgames.com/x/1843-planet-generation/">Red Blob Games</a></div>
 
-<script type="importmap">
+    <script type="importmap">
 {
     "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.min.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
-        "localforage": "https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"
+        "localforage": "https://cdn.jsdelivr.net/npm/localforage@1.10.0/+esm"
     }
 }
 </script>
-<script type="module" src="build/_bundle.js"></script>
+    <script type="module" src="build/_bundle.js"></script>
 </body>
+
 </html>

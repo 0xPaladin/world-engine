@@ -9,7 +9,7 @@
         "delaunator": "^3.0",
         "flatqueue": "*",
         "gl-matrix": "*",
-        "lil-gui": "^0.21.0",
+        "lil-xgui": "^0.1.0",
         "localforage": "^1.10.0",
         "regl": "1.7.0",
         "simplex-noise": "^2"

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import * as planet from './planet.js';
 import * as renderer from './renderer.js';
 import { generatePopulation } from '../world-population.js';
-import GUI from 'lil-gui';
+import { XGUI } from 'lil-xgui';
 import localforage from 'localforage';
 
 const canvas = document.getElementById('output');
@@ -283,7 +283,14 @@ const PARAMS = {
     },
 };
 
-const gui = new GUI({ title: 'Planet Generator', width: 300 });
+const gui = new XGUI({ title: 'Planet Generator', width: 300 });  //, mode: "accordion" 
+
+_selectedSaveCtrl = gui.add(PARAMS, 'selectedSave', ['']).name('Saved Worlds');
+_selectedSaveCtrl.domElement.classList.add("w-70");
+_selectedSaveCtrl.append(PARAMS, 'loadWorld').name('Load').domElement.classList.add("w-30");
+
+_saveNameCtrl = gui.add(PARAMS, 'worldName').name('World Name')
+    .append(PARAMS, 'saveWorld').name('Save').domElement.classList.add("w-30");
 
 gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'gasgiant']).name('Planet Type').onChange(v => {
     planet.setPlanetType(v);
@@ -306,8 +313,9 @@ gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'gasgiant']).na
     applyClimate();
     setTimeout(() => window.applyPopulation(), 200);
     toggleGasGiantUI(v);
-});
-_seedCtrl = gui.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
+}).append(PARAMS, 'newPlanet').name('New Planet').domElement.classList.add("w-50");
+
+gui.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
     planet.setSeed(v);
     renderer.updateGasGiantParams({ seed: v });
     planet.generateMesh();
@@ -315,35 +323,18 @@ _seedCtrl = gui.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
     applyClimate();
     setTimeout(() => window.applyPopulation(), 200);
 });
-gui.add(PARAMS, 'newPlanet').name('New Planet');
 
-_saveNameCtrl = gui.add(PARAMS, 'worldName').name('World Name');
-_selectedSaveCtrl = gui.add(PARAMS, 'selectedSave', ['']).name('Saved Worlds');
-gui.add(PARAMS, 'saveWorld').name('Save World');
-gui.add(PARAMS, 'loadWorld').name('Load World');
 
-const fPlanet = gui.addFolder('Planet');
-fPlanet.add(PARAMS, 'regions', 100, 100000, 100).name('Regions').onChange(v => {
+const fGeo = gui.addFolder('Geography');
+
+fGeo.add(PARAMS, 'regions', 100, 100000, 100).name('Regions').onChange(v => {
     planet.setN(v);
     planet.generateMesh();
     rebuildAll();
     applyClimate();
     setTimeout(() => window.applyPopulation(), 200);
-});
-fPlanet.add(PARAMS, 'plates', 5, 100, 1).name('Plates').onChange(v => {
-    planet.setP(v);
-    planet.generateMap();
-    rebuildAll();
-    applyClimate();
-});
-fPlanet.add(PARAMS, 'jitter', 0, 1, 0.001).name('Jitter').onChange(v => {
-    planet.setJitter(v);
-    planet.generateMesh();
-    rebuildAll();
-    applyClimate();
-    setTimeout(() => window.applyPopulation(), 200);
-});
-fPlanet.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChange(v => {
+})
+fGeo.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChange(v => {
     planet.setDrawMode(v);
     if (!renderer.hasMesh(v) && planet.getPlanetType() !== 'gasgiant') {
         renderer.rebuildPlanet(
@@ -355,24 +346,44 @@ fPlanet.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChang
         renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), planet.getPlanetType());
     }
     renderer.setDrawMode(v);
-});
-fPlanet.open();
+}).append(PARAMS, 'jitter', 0, 1, 0.001).name('Jitter').onChange(v => {
+    planet.setJitter(v);
+    planet.generateMesh();
+    rebuildAll();
+    applyClimate();
+    setTimeout(() => window.applyPopulation(), 200);
+})
 
-const fClimate = gui.addFolder('Climate');
-fClimate.add(PARAMS, 'temperature', -1, 1, 0.01).name('Temperature').onChange(v => {
-    planet.setTempOffset(v);
+fGeo.add(PARAMS, 'plates', 5, 100, 1).name('Plates').onChange(v => {
+    planet.setP(v);
+    planet.generateMap();
+    rebuildAll();
     applyClimate();
-});
-fClimate.add(PARAMS, 'rainfall', -0.5, 0.5, 0.01).name('Rainfall').onChange(v => {
-    planet.setRainOffset(v);
-    applyClimate();
-});
-fClimate.add(PARAMS, 'waterLevel', -0.5, 0.5, 0.01).name('Water Level').onChange(v => {
+}).append(PARAMS, 'waterLevel', -0.5, 0.5, 0.01).name('Water Level').onChange(v => {
     planet.setWaterLevel(v);
     applyClimate();
     renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), planet.getPlanetType());
 });
-fClimate.open();
+
+const fEarthlike = gui.addFolder('Earthlike Options');
+fEarthlike.add(PARAMS, 'temperature', -1, 1, 0.01).name('Temperature').onChange(v => {
+    planet.setTempOffset(v);
+    applyClimate();
+}).append(PARAMS, 'rainfall', -0.5, 0.5, 0.01).name('Rainfall').onChange(v => {
+    planet.setRainOffset(v);
+    applyClimate();
+});
+
+const fPopulation = fEarthlike.addFolder('Population');
+fPopulation.add(PARAMS, 'cultures', 2, 40, 1).name('Cultures').onChange(v => {
+    window._numCultures = v;
+}).append(PARAMS, 'numStates', 1, 50, 1).name('States').onChange(v => {
+    window._numStates = v;
+});
+fPopulation.add(PARAMS, 'maxBurgs', 100, 50000, 100).name('Max Burgs').onChange(v => {
+    window._maxBurgs = v;
+});
+fPopulation.add(PARAMS, 'applyPopulation').name('Apply Changes');
 
 function updateGasGiant() {
     renderer.updateGasGiantParams({
@@ -394,7 +405,7 @@ fGasGiant.addColor(PARAMS, 'colorA').name('Color A').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorB').name('Color B').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorC').name('Color C').onChange(updateGasGiant);
 
-const fBarren = gui.addFolder('Barren Type');
+const fBarren = gui.addFolder('Barren Options');
 fBarren.add(PARAMS, 'barrenSubtype', ['barren', 'hostile']).name('Subtype').onChange(v => {
     planet.setBarrenSubtype(v);
     planet.generateMesh();
@@ -419,10 +430,9 @@ function updateAirlessColors() {
     });
 }
 
-const fBarrenColors = gui.addFolder('Barren Colors');
-fBarrenColors.addColor(PARAMS, 'barrenColorA').name('Color A').onChange(updateBarrenColors);
-fBarrenColors.addColor(PARAMS, 'barrenColorB').name('Color B').onChange(updateBarrenColors);
-fBarrenColors.addColor(PARAMS, 'barrenColorC').name('Color C').onChange(updateBarrenColors);
+fBarren.addColor(PARAMS, 'barrenColorA').name('Color A').onChange(updateBarrenColors);
+fBarren.addColor(PARAMS, 'barrenColorB').name('Color B').onChange(updateBarrenColors);
+fBarren.addColor(PARAMS, 'barrenColorC').name('Color C').onChange(updateBarrenColors);
 
 const fAirlessColors = gui.addFolder('Airless Colors');
 fAirlessColors.addColor(PARAMS, 'airlessColorA').name('Color A').onChange(updateAirlessColors);
@@ -430,71 +440,41 @@ fAirlessColors.addColor(PARAMS, 'airlessColorB').name('Color B').onChange(update
 fAirlessColors.addColor(PARAMS, 'airlessColorC').name('Color C').onChange(updateAirlessColors);
 
 const fOverlays = gui.addFolder('Overlays');
-fOverlays.domElement.classList.add('overlays-folder');
-fOverlays.add(PARAMS, 'plateVectors').name('Plate Vectors').onChange(v => {
-    planet.setDrawPlateVectors(v);
-    renderer.togglePlateVectors(v);
-});
-fOverlays.add(PARAMS, 'plateBoundaries').name('Plate Boundaries').onChange(v => {
-    planet.setDrawPlateBoundaries(v);
-    renderer.togglePlateBoundaries(v);
-});
-fOverlays.add(PARAMS, 'cultureOverlay').name('Culture Overlay').onChange(v => {
+fOverlays.add(PARAMS, 'cultureOverlay').name('Cultures').onChange(v => {
     planet.setDrawCultureOverlay(v);
     renderer.toggleOverlay(v);
-});
-fOverlays.add(PARAMS, 'stateBorders').name('State Borders').onChange(v => {
-    planet.setDrawStateBorders(v);
-    renderer.toggleStateBorders(v);
-});
-fOverlays.add(PARAMS, 'stateOverlay').name('State Overlay').onChange(v => {
+}).append(PARAMS, 'stateOverlay').name('States').onChange(v => {
     planet.setDrawStateOverlay(v);
     renderer.toggleStateOverlay(v);
-});
-fOverlays.add(PARAMS, 'provinceOverlay').name('Province Overlay').onChange(v => {
+}).append(PARAMS, 'provinceOverlay').name('Provinces').onChange(v => {
     planet.setDrawProvinceOverlay(v);
     renderer.toggleProvinceOverlay(v);
-});
-fOverlays.add(PARAMS, 'provinceBorders').name('Province Borders').onChange(v => {
-    planet.setDrawProvinceBorders(v);
-    renderer.toggleProvinceBorders(v);
-});
-fOverlays.add(PARAMS, 'burgOverlay').name('Burg Overlay').onChange(v => {
+}).append(PARAMS, 'burgOverlay').name('Burgs').onChange(v => {
     planet.setDrawBurgOverlay(v);
     renderer.toggleBurgOverlay(v);
 });
-fOverlays.open();
 
-const fPopulation = gui.addFolder('Population');
-fPopulation.add(PARAMS, 'cultures', 2, 40, 1).name('Cultures').onChange(v => {
-    window._numCultures = v;
+const fBorders = fOverlays.addFolder('Borders');
+fBorders.add(PARAMS, 'stateBorders').name('States').onChange(v => {
+    planet.setDrawStateBorders(v);
+    renderer.toggleStateBorders(v);
+}).append(PARAMS, 'provinceBorders').name('Provinces').onChange(v => {
+    planet.setDrawProvinceBorders(v);
+    renderer.toggleProvinceBorders(v);
 });
-fPopulation.add(PARAMS, 'numStates', 1, 50, 1).name('States').onChange(v => {
-    window._numStates = v;
-});
-fPopulation.add(PARAMS, 'maxBurgs', 100, 50000, 100).name('Max Burgs').onChange(v => {
-    window._maxBurgs = v;
-});
-fPopulation.add(PARAMS, 'applyPopulation').name('Apply Changes');
-fPopulation.open();
-
-const fInfo = gui.addFolder('Region Info');
-fInfo.open();
 
 const infoContent = document.createElement('div');
 infoContent.style.cssText = 'padding:6px 8px;font-size:11px;line-height:1.6;color:#aaa;min-height:40px;white-space:pre-wrap;overflow-wrap:break-word;';
 infoContent.textContent = 'Click planet for region info';
-fInfo.domElement.appendChild(infoContent);
+gui.domElement.appendChild(infoContent);
 
 function toggleGasGiantUI(type) {
     const isGG = type === 'gasgiant';
     fGasGiant.domElement.style.display = isGG ? '' : 'none';
-    const hideClimate = isGG || type === 'airless';
-    fClimate.domElement.style.display = hideClimate ? 'none' : '';
-    fPlanet.domElement.style.display = isGG ? 'none' : '';
+    fEarthlike.domElement.style.display = type === 'earthlike' ? '' : 'none';
+    fGeo.domElement.style.display = isGG ? 'none' : '';
     fOverlays.domElement.style.display = isGG ? 'none' : '';
     fBarren.domElement.style.display = type === 'barren' ? '' : 'none';
-    fBarrenColors.domElement.style.display = type === 'barren' ? '' : 'none';
     fAirlessColors.domElement.style.display = type === 'airless' ? '' : 'none';
 }
 
