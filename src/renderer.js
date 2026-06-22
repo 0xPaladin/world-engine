@@ -95,6 +95,24 @@ export function updateGasGiantParams(params) {
     }
 }
 
+let _colormapColorParams = {};
+
+export function updateColormapColors(type, colors) {
+    _colormapColorParams = colors || {};
+    const newTexture = rebuildColormapTexture(
+        type,
+        _colormapColorParams.colorA,
+        _colormapColorParams.colorB,
+        _colormapColorParams.colorC,
+    );
+    if (planetMaterial) {
+        if (planetMaterial.uniforms.u_colormap.value) {
+            planetMaterial.uniforms.u_colormap.value.dispose();
+        }
+        planetMaterial.uniforms.u_colormap.value = newTexture;
+    }
+}
+
 let _clock = new THREE.Clock();
 
 export function render() {
@@ -245,12 +263,13 @@ export function rebuildRivers(meshData, mapData, waterLvl, planetType) {
     scene.add(riversLine);
 }
 
-export function rebuildCloudSphere(type, seed) {
+export function rebuildCloudSphere(type, seed, barrenSubtype) {
     removeFromScene(cloudMesh);
     cloudMesh = null;
     cloudMaterial = null;
 
-    if (type !== 'hostile') return;
+    const isHostile = type === 'hostile' || (type === 'barren' && barrenSubtype === 'hostile');
+    if (!isHostile) return;
 
     cloudMaterial = createCloudMaterial(seed);
     const geom = new THREE.SphereGeometry(1.008, 48, 24);
@@ -261,7 +280,12 @@ export function rebuildCloudSphere(type, seed) {
 
 export function updateColormapTexture(type) {
     if (type === 'gasgiant') return;
-    const newTexture = rebuildColormapTexture(type);
+    const newTexture = rebuildColormapTexture(
+        type,
+        _colormapColorParams.colorA,
+        _colormapColorParams.colorB,
+        _colormapColorParams.colorC,
+    );
     if (planetMaterial) {
         if (planetMaterial.uniforms.u_colormap.value) {
             planetMaterial.uniforms.u_colormap.value.dispose();

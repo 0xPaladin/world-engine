@@ -21,7 +21,7 @@ function rebuildAll() {
         ptype
     );
     renderer.rebuildRivers(planet.mesh, planet.map, planet.getWaterLevel(), ptype);
-    renderer.rebuildCloudSphere(ptype, planet.getSeed());
+    renderer.rebuildCloudSphere(ptype, planet.getSeed(), planet.getBarrenSubtype());
     renderer.updateColormapTexture(ptype);
 }
 
@@ -105,6 +105,13 @@ async function doSave() {
         colorA: PARAMS.colorA,
         colorB: PARAMS.colorB,
         colorC: PARAMS.colorC,
+        barrenColorA: PARAMS.barrenColorA,
+        barrenColorB: PARAMS.barrenColorB,
+        barrenColorC: PARAMS.barrenColorC,
+        airlessColorA: PARAMS.airlessColorA,
+        airlessColorB: PARAMS.airlessColorB,
+        airlessColorC: PARAMS.airlessColorC,
+        barrenSubtype: PARAMS.barrenSubtype,
     };
     await localforage.setItem('world_' + name, data);
     PARAMS.selectedSave = name;
@@ -118,6 +125,7 @@ async function doLoad() {
     if (!data) return;
 
     planet.setPlanetType(data.planetType);
+    planet.setBarrenSubtype(data.barrenSubtype || 'barren');
     planet.setSeed(data.seed);
     planet.setN(data.regions);
     planet.setP(data.plates);
@@ -164,6 +172,13 @@ async function doLoad() {
     PARAMS.colorA = data.colorA;
     PARAMS.colorB = data.colorB;
     PARAMS.colorC = data.colorC;
+    PARAMS.barrenColorA = data.barrenColorA || BARREN_DEFAULTS.colorA;
+    PARAMS.barrenColorB = data.barrenColorB || BARREN_DEFAULTS.colorB;
+    PARAMS.barrenColorC = data.barrenColorC || BARREN_DEFAULTS.colorC;
+    PARAMS.airlessColorA = data.airlessColorA || AIRLESS_DEFAULTS.colorA;
+    PARAMS.airlessColorB = data.airlessColorB || AIRLESS_DEFAULTS.colorB;
+    PARAMS.airlessColorC = data.airlessColorC || AIRLESS_DEFAULTS.colorC;
+    PARAMS.barrenSubtype = data.barrenSubtype || 'barren';
     PARAMS.worldName = name;
 
     renderer.updateGasGiantParams({
@@ -174,6 +189,16 @@ async function doLoad() {
         colorB: new THREE.Color(data.colorB),
         colorC: new THREE.Color(data.colorC),
         seed: data.seed,
+    });
+    renderer.updateColormapColors('barren', {
+        colorA: PARAMS.barrenColorA,
+        colorB: PARAMS.barrenColorB,
+        colorC: PARAMS.barrenColorC,
+    });
+    renderer.updateColormapColors('airless', {
+        colorA: PARAMS.airlessColorA,
+        colorB: PARAMS.airlessColorB,
+        colorC: PARAMS.airlessColorC,
     });
     planet.generateMesh();
     rebuildAll();
@@ -190,6 +215,18 @@ const GAS_GIANT_DEFAULTS = {
     colorA: '#fff8f0',
     colorB: '#f0e8b0',
     colorC: '#afa0d0',
+};
+
+const BARREN_DEFAULTS = {
+    colorA: '#321408',
+    colorB: '#aa5523',
+    colorC: '#fae6e6',
+};
+
+const AIRLESS_DEFAULTS = {
+    colorA: '#555555',
+    colorB: '#aaaaaa',
+    colorC: '#eeeeee',
 };
 
 const PARAMS = {
@@ -223,6 +260,13 @@ const PARAMS = {
     colorA: GAS_GIANT_DEFAULTS.colorA,
     colorB: GAS_GIANT_DEFAULTS.colorB,
     colorC: GAS_GIANT_DEFAULTS.colorC,
+    barrenColorA: BARREN_DEFAULTS.colorA,
+    barrenColorB: BARREN_DEFAULTS.colorB,
+    barrenColorC: BARREN_DEFAULTS.colorC,
+    airlessColorA: AIRLESS_DEFAULTS.colorA,
+    airlessColorB: AIRLESS_DEFAULTS.colorB,
+    airlessColorC: AIRLESS_DEFAULTS.colorC,
+    barrenSubtype: planet.getBarrenSubtype(),
     newPlanet: () => {
         const newSeed = planet.getSeed() + 1;
         PARAMS.seed = newSeed;
@@ -241,8 +285,22 @@ const PARAMS = {
 
 const gui = new GUI({ title: 'Planet Generator', width: 300 });
 
-gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'hostile', 'gasgiant']).name('Planet Type').onChange(v => {
+gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'gasgiant']).name('Planet Type').onChange(v => {
     planet.setPlanetType(v);
+    PARAMS.barrenSubtype = planet.getBarrenSubtype();
+    if (v === 'barren') {
+        renderer.updateColormapColors('barren', {
+            colorA: PARAMS.barrenColorA,
+            colorB: PARAMS.barrenColorB,
+            colorC: PARAMS.barrenColorC,
+        });
+    } else if (v === 'airless') {
+        renderer.updateColormapColors('airless', {
+            colorA: PARAMS.airlessColorA,
+            colorB: PARAMS.airlessColorB,
+            colorC: PARAMS.airlessColorC,
+        });
+    }
     planet.generateMesh();
     rebuildAll();
     applyClimate();
@@ -336,6 +394,41 @@ fGasGiant.addColor(PARAMS, 'colorA').name('Color A').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorB').name('Color B').onChange(updateGasGiant);
 fGasGiant.addColor(PARAMS, 'colorC').name('Color C').onChange(updateGasGiant);
 
+const fBarren = gui.addFolder('Barren Type');
+fBarren.add(PARAMS, 'barrenSubtype', ['barren', 'hostile']).name('Subtype').onChange(v => {
+    planet.setBarrenSubtype(v);
+    planet.generateMesh();
+    rebuildAll();
+    applyClimate();
+    setTimeout(() => window.applyPopulation(), 200);
+});
+
+function updateBarrenColors() {
+    renderer.updateColormapColors('barren', {
+        colorA: PARAMS.barrenColorA,
+        colorB: PARAMS.barrenColorB,
+        colorC: PARAMS.barrenColorC,
+    });
+}
+
+function updateAirlessColors() {
+    renderer.updateColormapColors('airless', {
+        colorA: PARAMS.airlessColorA,
+        colorB: PARAMS.airlessColorB,
+        colorC: PARAMS.airlessColorC,
+    });
+}
+
+const fBarrenColors = gui.addFolder('Barren Colors');
+fBarrenColors.addColor(PARAMS, 'barrenColorA').name('Color A').onChange(updateBarrenColors);
+fBarrenColors.addColor(PARAMS, 'barrenColorB').name('Color B').onChange(updateBarrenColors);
+fBarrenColors.addColor(PARAMS, 'barrenColorC').name('Color C').onChange(updateBarrenColors);
+
+const fAirlessColors = gui.addFolder('Airless Colors');
+fAirlessColors.addColor(PARAMS, 'airlessColorA').name('Color A').onChange(updateAirlessColors);
+fAirlessColors.addColor(PARAMS, 'airlessColorB').name('Color B').onChange(updateAirlessColors);
+fAirlessColors.addColor(PARAMS, 'airlessColorC').name('Color C').onChange(updateAirlessColors);
+
 const fOverlays = gui.addFolder('Overlays');
 fOverlays.domElement.classList.add('overlays-folder');
 fOverlays.add(PARAMS, 'plateVectors').name('Plate Vectors').onChange(v => {
@@ -400,6 +493,9 @@ function toggleGasGiantUI(type) {
     fClimate.domElement.style.display = hideClimate ? 'none' : '';
     fPlanet.domElement.style.display = isGG ? 'none' : '';
     fOverlays.domElement.style.display = isGG ? 'none' : '';
+    fBarren.domElement.style.display = type === 'barren' ? '' : 'none';
+    fBarrenColors.domElement.style.display = type === 'barren' ? '' : 'none';
+    fAirlessColors.domElement.style.display = type === 'airless' ? '' : 'none';
 }
 
 toggleGasGiantUI(planet.getPlanetType());
@@ -608,17 +704,19 @@ window.pickRegion = function (ndcX, ndcY) {
         else if (e < 0.45) biome = 'Highland Terrain';
         else biome = 'Peak / Ridge';
     } else if (ptype === 'barren') {
-        if (e < 0) biome = 'Depression';
-        else if (e < 0.15) biome = 'Lowland Plain';
-        else if (e < 0.35) biome = 'Volcanic Rise';
-        else if (e < 0.55) biome = 'Highland';
-        else biome = 'Polar Cap / Summit';
-    } else if (ptype === 'hostile') {
-        if (e < 0) biome = 'Rift Basin';
-        else if (e < 0.15) biome = 'Sulfurous Plain';
-        else if (e < 0.35) biome = 'Volcanic Dome';
-        else if (e < 0.55) biome = 'Tessera Highland';
-        else biome = 'Mountain / Ridge';
+        if (PARAMS.barrenSubtype === 'hostile') {
+            if (e < 0) biome = 'Rift Basin';
+            else if (e < 0.15) biome = 'Sulfurous Plain';
+            else if (e < 0.35) biome = 'Volcanic Dome';
+            else if (e < 0.55) biome = 'Tessera Highland';
+            else biome = 'Mountain / Ridge';
+        } else {
+            if (e < 0) biome = 'Depression';
+            else if (e < 0.15) biome = 'Lowland Plain';
+            else if (e < 0.35) biome = 'Volcanic Rise';
+            else if (e < 0.55) biome = 'Highland';
+            else biome = 'Polar Cap / Summit';
+        }
     } else {
         if (e < 0) {
             biome = 'Ocean';

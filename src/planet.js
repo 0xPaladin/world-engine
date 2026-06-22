@@ -27,6 +27,7 @@ let tempOffset = 0;
 let rainOffset = 0;
 let waterLevel = 0;
 let _planetType = 'earthlike';
+let _barrenSubtype = 'barren';
 
 let _randomNoise = new SimplexNoise(aleaPRNG(_seed));
 const persistence = 2 / 3;
@@ -414,8 +415,9 @@ function generateMesh() {
 function generateMap() {
     switch (_planetType) {
         case 'airless': return generateAirlessMap();
-        case 'barren': return generateBarrenMap();
-        case 'hostile': return generateHostileMap();
+        case 'barren':
+            if (_barrenSubtype === 'hostile') return generateHostileMap();
+            return generateBarrenMap();
         case 'gasgiant': return generateGasGiantMap();
         default: return generateEarthlikeMap();
     }
@@ -694,6 +696,9 @@ export function setDrawBurgOverlay(v) { draw_burgOverlay = v; }
 
 export function getPlanetType() { return _planetType; }
 export function setPlanetType(v) { _planetType = v; }
+
+export function getBarrenSubtype() { return _barrenSubtype; }
+export function setBarrenSubtype(v) { _barrenSubtype = v; }
 
 export {
     mesh, map, quadGeometry,

@@ -16,8 +16,8 @@ function makeTexture(data) {
     return texture;
 }
 
-export function rebuildColormapTexture(type) {
-    return makeTexture(colormap.getData(type));
+export function rebuildColormapTexture(type, colorA, colorB, colorC) {
+    return makeTexture(colormap.getData(type, colorA, colorB, colorC));
 }
 
 const defaultTexture = makeTexture(colormap.data);
