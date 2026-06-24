@@ -63,20 +63,6 @@ serve({
       }
     }
 
-    if (path === "/build/_bundle.regl.js") {
-      const result = await Bun.build({
-        entrypoints: [join(ROOT, "regl/planet-generation.js")],
-        format: "esm",
-        sourcemap: "inline",
-      });
-      if (!result.success) {
-        return new Response(result.logs.map(l => l.message).join("\n"), { status: 500 });
-      }
-      return new Response(await result.outputs[0].text(), {
-        headers: { "Content-Type": "application/javascript", "Cache-Control": "no-cache" },
-      });
-    }
-
     const f = file(filePath);
     const exists = await f.exists();
     if (!exists) return new Response("Not Found", { status: 404 });

@@ -1,44 +1,50 @@
 # Agent Conventions
 
+## Architecture
+
+```
+engine/                 ← Standalone library (generation + rendering, no GUI)
+  index.js              ← Public API entry point
+  core/                 ← Planet generation & simulation
+    planet.js           → mesh gen, map gen, plates, elevation, rivers, climate
+    sphere-mesh.js      → Fibonacci sphere mesh, Delaunay, Voronoi
+    world-population.js → culture/state/burg/province Dijkstra generation
+    colormap.js         → 64×64 RGBA biome colormap
+    aleaPRNG-1.1.js     → Alea PRNG (seeded, good statistical properties)
+  render/               ← Three.js rendering pipeline
+    renderer.js         → scene, camera, materials, draw pipeline, overlay
+    shaders.js          → ShaderMaterial: colormap surface, lines, overlays, gas giant, cloud
+    sun-shaders.js      → Sun/star ShaderMaterials & geometry generators
+    colormap-texture.js → Three.js DataTexture from colormap.js
+
+src/
+  main.js               ← UI/GUI layer only: window.* API, lil-gui, save/load, click handlers
+                         Imports from engine/ — the only file with GUI dependencies.
+```
+
+Use engine standalone: `import { generateMesh, initRenderer, render } from './engine/index.js'`
+
 ## Server
 
 - Bun dev server on port 3333 (`bun server.js`)
   - Bun auto-compiles ESM imports and CommonJS `require()` on-the-fly — no separate build step needed
-  - Also bundles `regl/planet-generation.js` on-the-fly at `/build/_bundle.regl.js`
   - External modules (three, three/addons) loaded via CDN importmap
-- Three.js version: `http://localhost:3333/`
-- regl version: `http://localhost:3333/regl/index.html`
+- Dev server: `http://localhost:3333/`
+
+## Build
+
+- `bash build.sh` produces:
+  - `build/_bundle.engine.js` — standalone engine (75KB minified)
+  - `build/_bundle.js` — full app with GUI (93KB minified)
 
 ## Code Style
 
 - No comments in source code
-- ES modules in src/; commonjs interop via esbuild bundling
+- ES modules everywhere
 - External ESM requires explicit `.default` import (e.g. `{default: FlatQueue}`)
 - Expose public API functions on `window` object
 - No TypeScript, no linting config
 - Biome lookups via `colormap.js` RGBA texture (elevation × moisture)
-
-## Files
-
-### Core (shared by both versions)
-- `sphere-mesh.js` — Fibonacci sphere mesh, Delaunay, Voronoi
-- `world-population.js` — culture/state/burg/province Dijkstra generation
-- `colormap.js` — 64×64 RGBA biome colormap
-- `server.js` — Bun static file server
-- `aleaPRNG-1.1.js` — Alea PRNG (seeded, good statistical properties)
-
-### Three.js version (active)
-- `src/main.js` — entry point, window.* API, Three.js scene init, lil-gui controls, save/load via server API
-- `src/planet.js` — simulation code: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
-- `src/renderer.js` — Three.js scene, camera, materials, draw pipeline, overlay
-- `src/shaders.js` — Three.js ShaderMaterial: colormap surface, lines, overlays, gas giant
-- `src/sun-shaders.js` — Sun/star ShaderMaterials: sphere (4D simplex FBM surface, fresnel, brightness-to-color), rays, flares, glow; geometry generators for rays/flares/glow
-- `colormap-texture.js` — Three.js DataTexture from colormap.js
-
-### regl version (preserved)
-- `regl/planet-generation.js` — original regl-based code (unchanged)
-- `regl/index.html` — original HTML with drag handlers
-- `build/_bundle.regl.js` — esbuild regl output
 
 ## Planet Types
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import * as planet from './planet.js';
-import * as renderer from './renderer.js';
-import { generatePopulation } from '../world-population.js';
+import * as planet from '../engine/core/planet.js';
+import * as renderer from '../engine/render/renderer.js';
+import { generatePopulation } from '../engine/core/world-population.js';
 import GUI from 'lil-gui';
 
 const canvas = document.getElementById('output');
@@ -653,7 +653,7 @@ function toggleGasGiantUI(type) {
 
 toggleGasGiantUI(planet.getPlanetType());
 
-/* expose the same window.* API as the regl version */
+/* expose public API on window for external/console access */
 
 window.getPlanetType = () => planet.getPlanetType();
 window.setPlanetType = v => { planet.setPlanetType(v); };

@@ -4,6 +4,8 @@ Procedural planet generation on a sphere with interactive climate control, cultu
 
 Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.com/x/1843-planet-generation/) experiment. Extended with culture/state population generation, climate sliders from [Azgaar's Fantasy Map Generator](https://github.com/Azgaar/Fantasy-Map-Generator). All part of an interactive SPA.
 
+**Note:** Originally used regl for rendering; now fully migrated to Three.js. The standalone `engine/` library provides both generation and Three.js-based rendering with no GUI dependencies.
+
 ## Features
 
 - **Planet types**: switch between Earth-like, airless (cratered), barren (desert world with barren/hostile subtype), gas giant (procedural shader), and star (procedural sun with rays/flares/glow) — each with its own generation pipeline and colormap
@@ -41,42 +43,53 @@ Changing the planet type triggers a full regeneration: new mesh, map, colormap t
 
 ## Architecture
 
-### Three.js version (active)
+### Engine (standalone library — no GUI dependencies)
+
 ```
-src/main.js          — Entry point, window.* API, Three.js scene init, lil-gui controls, save/load via localforage
-src/planet.js        — Simulation: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
-src/renderer.js      — Three.js scene, camera, materials, draw pipeline, overlay, cloud sphere
-src/shaders.js       — Three.js ShaderMaterial: colormap surface, lines, overlays, cloud shader
-src/sun-shaders.js   — Star/sun ShaderMaterials and geometry generators (sphere, rays, flares, glow)
-colormap-texture.js  — Three.js DataTexture wrapper for per-type biome lookup
-index.html           — SPA layout, controls, canvas (OrbitControls)
+engine/
+  index.js              — Public API entry point
+  core/
+    planet.js           → mesh gen, map gen, plates, elevation, rivers, climate
+    sphere-mesh.js      → Fibonacci sphere mesh, Delaunay, Voronoi
+    world-population.js → culture/state/burg/province Dijkstra generation
+    colormap.js         → 64×64 RGBA biome colormap
+    aleaPRNG-1.1.js     → Alea PRNG (seeded)
+  render/
+    renderer.js         → Three.js scene, camera, materials, draw pipeline, overlay
+    shaders.js          → ShaderMaterial: colormap surface, lines, overlays, gas giant, cloud
+    sun-shaders.js      → Sun/star ShaderMaterials & geometry generators
+    colormap-texture.js → Three.js DataTexture from colormap.js
 ```
 
-### regl version (preserved)
+Use standalone: `import { generateMesh, initRenderer, render } from './engine/index.js'`
+
+### App (UI layer)
+
 ```
-regl/planet-generation.js — Original regl-based code (unchanged)
-regl/index.html           — Original HTML with manual drag handlers
+src/
+  main.js               ← Entry point, window.* API, Three.js scene init, lil-gui controls, save/load
 ```
 
-### Shared
+`src/main.js` imports from `engine/` — the only file with GUI dependencies.
+
+### Shared modules
+
 ```
-sphere-mesh.js      — Fibonacci sphere + Delaunay triangulation + jitter
-world-population.js — Culture/state/burg/province generation via Dijkstra
-colormap.js         — 64×64 RGBA lookup texture per planet type (elevation × moisture)
-server.js           — Bun.js static-file server (port 3333)
+sphere-mesh.js          → Fibonacci sphere + Delaunay (legacy CJS, for reference)
+world-population.js     → Population generation (legacy CJS, for reference)
+colormap.js             → 64×64 RGBA lookup texture (legacy CJS, for reference)
+server.js               → Bun static-file server (port 3333)
 ```
 
 ## Dependencies
 
-- `three` — WebGL (Three.js renderer)
-- `regl@1.7.0` — WebGL (preserved regl version, pinned)
+- `three` — WebGL renderer (Three.js)
 - `@redblobgames/dual-mesh` — sphere mesh (Delaunay + Voronoi)
-- `aleaPRNG-1.1.js` — bundled Alea PRNG (replaces `@redblobgames/prng` in Three.js version)
+- `aleaPRNG-1.1.js` — bundled Alea PRNG
 - `gl-matrix` — matrix/vector math
 - `delaunator` — Delaunay triangulation
 - `simplex-noise` — 3D noise
 - `flatqueue` — priority queue (Dijkstra)
-- `localforage` — browser local storage abstraction (save/load)
 - `esbuild` — bundler
 
 ## Setup
@@ -87,26 +100,29 @@ npm install
 
 ## Build
 
-Three.js (default):
+Engine bundle (standalone, no GUI):
 ```bash
-node_modules/.bin/esbuild src/main.js --bundle --sourcemap --format=esm --outfile=build/_bundle.js --external:three --external:three/addons/* --external:localforage
+node_modules/.bin/esbuild engine/index.js --bundle --minify --sourcemap --outfile=build/_bundle.engine.js --external:three --external:three/addons/
 ```
 
-regl (preserved):
+Full app bundle (engine + GUI):
 ```bash
-node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfile=build/_bundle.regl.js
+node_modules/.bin/esbuild src/main.js --bundle --minify --sourcemap --outfile=build/_bundle.js --external:three --external:three/addons/
+```
+
+Or use the build script:
+```bash
+bash build.sh
 ```
 
 ## Run
 
 Static file server on port 3333:
-
 ```bash
 bun server.js
 ```
 
-- Three.js version: `http://localhost:3333/`
-- regl version: `http://localhost:3333/regl/index.html`
+Then open `http://localhost:3333/`
 
 ## Controls
 
@@ -114,7 +130,7 @@ bun server.js
 | ---------------- | ----------------------------------------------- |
 | World Name       | Name for saving the current world               |
 | Saved Worlds     | Dropdown of previously saved worlds             |
-| Save World       | Persist all settings to localforage             |
+| Save World       | Persist all settings to server                  |
 | Load World       | Restore a saved world                           |
 | Planet Type      | Earth-like, Airless, Barren, Gas Giant, Star    |
 | Seed             | PRNG seed for deterministic generation          |
@@ -178,16 +194,9 @@ Names are generated from seeded syllable templates (placeholder for full Azgaar 
 - Rivers skip sides where both endpoints have adjusted elevation < 0 (fully submerged)
 - Sphere mesh has no map edges — Dijkstra expansion wraps seamlessly across all longitudes
 - Mesh jitter caches are cleared on each `makeSphere()` call
-- Three.js version uses `ShaderMaterial` with `dFdx`/`dFdy` derivative-based normals and 2D colormap lookup
+- Rendering uses `ShaderMaterial` with `dFdx`/`dFdy` derivative-based normals and 2D colormap lookup
 - Climate updates set `uv.needsUpdate = true` on the planet geometry (no mesh rebuild needed)
 - Picking uses `Raycaster` for ray-sphere intersection + brute-force nearest-region lookup
-- regl v1.7.0 preserved in `regl/` directory — v2.x has breaking API differences
-- State Dijkstra uses `aleaPRNG` for seeded random generation (replaced LCG in `world-population.js` and `@redblobgames/prng` in `src/planet.js`)
-- State expansion cost clamps to minimum 1 to prevent negative costs from burg discount (`ec -= 20`) cascading via priority queue
-- Culture center placement retries with progressively smaller minDist when insufficient well-spaced land cells exist
-- Burg placement uses spatial grid (`cellKeyFromR` + `Map`) for O(n) proximity checks instead of O(n²)
-- All overlays rebuilt on `applyPopulation()` via `renderer.rebuild*()` calls; visibility toggled via `renderer.toggle*()` calls
-- Burg overlay points are offset radially 1.003× to avoid depth-fighting with the planet surface
 
 ## License
 

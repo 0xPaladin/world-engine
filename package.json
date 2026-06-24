@@ -1,8 +1,12 @@
 {
-    "name": "@redblobgames/1843-planet-generation",
+    "name": "world-engine",
     "version": "1.0.0",
     "private": true,
     "license": "Apache-2.0",
+    "exports": {
+        "./engine": "./engine/index.js",
+        "./engine/*": "./engine/*"
+    },
     "dependencies": {
         "@redblobgames/dual-mesh": "https://github.com/redblobgames/dual-mesh",
         "@redblobgames/prng": "https://github.com/redblobgames/prng",
@@ -10,9 +14,10 @@
         "flatqueue": "*",
         "gl-matrix": "*",
         "lil-gui": "^0.21.0",
-        "regl": "1.7.0",
         "simplex-noise": "^2",
         "three": "0.160.0"
     },
-    "devDependencies": {}
+    "devDependencies": {
+        "esbuild": "^0.28.0"
+    }
 }

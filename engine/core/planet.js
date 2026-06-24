@@ -1,22 +1,12 @@
-/*
- * Simulation layer: mesh generation, plate tectonics, elevation, rivers, climate
- * No rendering dependencies. Legacy CJS module for reference only.
- * The active Three.js version lives in engine/core/planet.js
- *
- * From https://www.redblobgames.com/x/1843-planet-generation/
- * Copyright 2018 Red Blob Games <redblobgames@gmail.com>
- * License: Apache v2.0 <http://www.apache.org/licenses/LICENSE-2.0.html>
- */
+// Planet generation core: mesh gen, plates, elevation, rivers, climate, colormap
+import SimplexNoise from 'simplex-noise';
+import { default as FlatQueue } from 'flatqueue';
+import { vec3 } from 'gl-matrix';
+import aleaPRNG from './aleaPRNG-1.1.js';
+import { makeSphere } from './sphere-mesh.js';
 
 let _seed = 123;
 
-const SimplexNoise = require('simplex-noise');
-const { default: FlatQueue } = require('flatqueue');
-const { vec3, vec4, mat4 } = require('gl-matrix');
-const aleaPRNG = require('../aleaPRNG-1.1');
-const SphereMesh = require('../sphere-mesh');
-
-/* UI parameters */
 let N = 25000;
 let P = 20;
 let jitter = 0.75;
@@ -34,6 +24,7 @@ let _randomNoise = new SimplexNoise(aleaPRNG(_seed));
 const persistence = 2 / 3;
 const amplitudes = Array.from({ length: 5 }, (_, octave) => Math.pow(persistence, octave));
 
+// 5-octave fractal Brownian motion via simplex noise
 function fbm_noise(nx, ny, nz) {
     let sum = 0, sumOfAmplitudes = 0;
     for (let octave = 0; octave < amplitudes.length; octave++) {
@@ -44,6 +35,7 @@ function fbm_noise(nx, ny, nz) {
     return sum / sumOfAmplitudes;
 }
 
+// Compute centroid xyz for every triangle from its 3 corner regions
 function generateTriangleCenters(mesh, { r_xyz }) {
     let { numTriangles } = mesh;
     let t_xyz = new Float32Array(3 * numTriangles);
@@ -61,6 +53,7 @@ function generateTriangleCenters(mesh, { r_xyz }) {
     return t_xyz;
 }
 
+// Build per-side triangle strip geometry for flat/centroid rendering, colored by region
 function generateVoronoiGeometry(mesh, { r_xyz, t_xyz }, r_color_fn) {
     const { numSides } = mesh;
     let xyz = new Float32Array(3 * 3 * numSides),
@@ -89,10 +82,12 @@ function generateVoronoiGeometry(mesh, { r_xyz, t_xyz }, r_color_fn) {
     return { xyz, tm };
 }
 
+// Geometry container for quads (shaded) draw mode: interleaved vertex xyz + elevation/moisture tm
 class QuadGeometry {
     constructor() {
     }
 
+    // Apply temperature/rainfall/water-level offsets to UV data in-place (no mesh rebuild)
     applyClimate(numRegions, numTriangles, r_elevation, r_moisture, t_elevation, t_moisture, tempOff, rainOff, waterOff) {
         const { tm } = this;
         let p = 0;
@@ -109,12 +104,14 @@ class QuadGeometry {
         }
     }
 
+    // Allocate index/xyz/tm buffers sized to mesh dimensions
     setMesh({ numSides, numRegions, numTriangles }) {
         this.I = new Int32Array(3 * numSides);
         this.xyz = new Float32Array(3 * (numRegions + numTriangles));
         this.tm = new Float32Array(2 * (numRegions + numTriangles));
     }
 
+    // Fill xyz/tm/I buffers from generated map data; valley vs ridge side selection for rivers
     setMap(mesh, { r_xyz, t_xyz, r_color_fn, s_flow, r_elevation, t_elevation, r_moisture, t_moisture }) {
         const V = 0.95;
         const { numSides, numRegions, numTriangles } = mesh;
@@ -154,8 +151,7 @@ class QuadGeometry {
     }
 }
 
-/****************** Plates ******************/
-
+// Return a set of N random region indices (used for plate seed placement)
 function pickRandomRegions(mesh, N, randInt) {
     let { numRegions } = mesh;
     let chosen_r = new Set();
@@ -166,6 +162,7 @@ function pickRandomRegions(mesh, N, randInt) {
 }
 
 
+// Assign each region to a tectonic plate via seeded random expansion from plate centers
 function generatePlates(mesh, r_xyz) {
     let r_plate = new Int32Array(mesh.numRegions);
     r_plate.fill(-1);
@@ -202,6 +199,7 @@ function generatePlates(mesh, r_xyz) {
 }
 
 
+// BFS distance from seeds_r outward, stopping at stop_r boundaries (uses shuffled order)
 function assignDistanceField(mesh, seeds_r, stop_r) {
     let { numRegions } = mesh;
     let r_distance = new Float32Array(numRegions);
@@ -233,6 +231,7 @@ function assignDistanceField(mesh, seeds_r, stop_r) {
 
 
 const COLLISION_THRESHOLD = 0.75;
+// Detect convergent/divergent plate boundaries; classify into mountain/ocean/coastline sets
 function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
     const deltaTime = 1e-2;
     let { numRegions } = mesh;
@@ -274,6 +273,7 @@ function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
 }
 
 
+// Compute elevation per region from plate collisions; uses 3 distance fields + FBM noise
 function assignRegionElevation(mesh, { r_xyz, plate_is_ocean, r_plate, plate_vec, /* out */ r_elevation }) {
     const epsilon = 1e-3;
     let { numRegions } = mesh;
@@ -310,8 +310,7 @@ function assignRegionElevation(mesh, { r_xyz, plate_is_ocean, r_plate, plate_vec
 }
 
 
-/****************** Rivers ******************/
-
+// Average region elevation/moisture onto triangles (simple 3-corner mean)
 function assignTriangleValues(mesh, { r_elevation, r_moisture, /* out */ t_elevation, t_moisture }) {
     const { numTriangles } = mesh;
     for (let t = 0; t < numTriangles; t++) {
@@ -326,6 +325,7 @@ function assignTriangleValues(mesh, { r_elevation, r_moisture, /* out */ t_eleva
 
 
 let _queue = new FlatQueue();
+// Compute downhill direction per triangle (toward lowest neighbor); priority-queue driven
 function assignDownflow(mesh, { t_elevation, /* out */ t_downflow_s, /* out */ order_t }) {
     let { numTriangles } = mesh,
         queue_in = 0;
@@ -361,6 +361,7 @@ function assignDownflow(mesh, { t_elevation, /* out */ t_downflow_s, /* out */ o
 }
 
 
+// Accumulate water flow downstream: moisture → flow per triangle, sum along downflow edges
 function assignFlow(mesh, { order_t, t_elevation, t_moisture, t_downflow_s, /* out */ t_flow, /* out */ s_flow }) {
     let { numTriangles, _halfedges } = mesh;
     s_flow.fill(0);
@@ -386,15 +387,14 @@ function assignFlow(mesh, { order_t, t_elevation, t_moisture, t_downflow_s, /* o
 }
 
 
-/****************** Main orchestration ******************/
-
 var mesh, map = {};
 var quadGeometry = new QuadGeometry();
 
+// Full mesh + map generation: create sphere, allocate map arrays, dispatch to type-specific generator
 function generateMesh() {
     let t0 = performance.now();
     _randomNoise = new SimplexNoise(aleaPRNG(_seed));
-    let result = SphereMesh.makeSphere(N, jitter, aleaPRNG(_seed));
+    let result = makeSphere(N, jitter, aleaPRNG(_seed));
     mesh = result.mesh;
     quadGeometry.setMesh(mesh);
 
@@ -410,9 +410,9 @@ function generateMesh() {
     map.r_xyz = result.r_xyz;
     map.t_xyz = generateTriangleCenters(mesh, map);
     generateMap();
-    console.log(`[Planet] Mesh+Map: ${(performance.now()-t0).toFixed(0)}ms  (N=${N}, P=${P}, jitter=${jitter}, type=${_planetType})`);
 }
 
+// Dispatch to planet-type-specific map generation
 function generateMap() {
     switch (_planetType) {
         case 'airless': return generateAirlessMap();
@@ -425,6 +425,7 @@ function generateMap() {
     }
 }
 
+// Earth-like: plates, 50% ocean, collision elevation, FBM moisture &gt;0.15, rivers, quad geometry
 function generateEarthlikeMap() {
     let result = generatePlates(mesh, map.r_xyz);
     map.plate_r = result.plate_r;
@@ -448,6 +449,7 @@ function generateEarthlikeMap() {
     quadGeometry.setMap(mesh, map);
 }
 
+// Generate cratered elevation: 30–70 bowl+rim+ejecta craters on FBM baseline, normalized to [-0.8, 0.8]
 function generateCraterElevation(mesh, r_xyz) {
     const numRegions = mesh.numRegions;
     const elevation = new Float32Array(numRegions);
@@ -505,6 +507,7 @@ function generateCraterElevation(mesh, r_xyz) {
     return elevation;
 }
 
+// Airless: single flat plate, crater elevation, zero moisture, no rivers
 function generateAirlessMap() {
     map.plate_r = [0];
     map.r_plate = new Int32Array(mesh.numRegions);
@@ -532,6 +535,7 @@ function generateAirlessMap() {
     quadGeometry.setMap(mesh, map);
 }
 
+// Barren: plate collision + volcano boost on 40% of plate centers, trace moisture with polar ice
 function generateBarrenMap() {
     let result = generatePlates(mesh, map.r_xyz);
     map.plate_r = result.plate_r;
@@ -577,6 +581,7 @@ function generateBarrenMap() {
     quadGeometry.setMap(mesh, map);
 }
 
+// Hostile barren: 1.5x plates, volcanic dome elevation constructs, zero moisture, no rivers
 function generateHostileMap() {
     let savedP = P;
     P = Math.round(P * 1.5);
@@ -630,6 +635,7 @@ function generateHostileMap() {
     quadGeometry.setMap(mesh, map);
 }
 
+// Gas giant: zero elevation/moisture everywhere, single flat plate — visual via procedural shader
 function generateGasGiantMap() {
     map.plate_r = [0];
     map.r_plate = new Int32Array(mesh.numRegions);
@@ -653,6 +659,7 @@ function generateGasGiantMap() {
     quadGeometry.setMap(mesh, map);
 }
 
+// Sun: uniform 0.5 elevation, zero moisture, single flat plate — visual via 4D simplex shader
 function generateSunMap() {
     map._sunSeed = _seed;
     map.plate_r = [0];
@@ -684,7 +691,6 @@ let draw_provinceOverlay = false;
 let draw_provinceBorders = false;
 let draw_burgOverlay = false;
 
-/* Getter/setter functions for mutable params (ESM live bindings are read-only) */
 export function getSeed() { return _seed; }
 export function setSeed(v) { _seed = v; }
 export function getN() { return N; }
