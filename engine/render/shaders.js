@@ -1,8 +1,8 @@
 // Shader materials: colormap surface, lines, overlays, gas giant, clouds
 import * as THREE from 'three';
+import { SimplexNoise } from '../lib/redblob.lib.js';
 import colormapTexture from './colormap-texture.js';
 import aleaPRNG from '../core/aleaPRNG-1.1.js';
-import SimplexNoise from 'simplex-noise';
 
 const planetVertexShader = `
 varying vec2 v_tm;

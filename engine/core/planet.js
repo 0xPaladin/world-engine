@@ -1,7 +1,5 @@
 // Planet generation core: mesh gen, plates, elevation, rivers, climate, colormap
-import SimplexNoise from 'simplex-noise';
-import { default as FlatQueue } from 'flatqueue';
-import { vec3 } from 'gl-matrix';
+import { SimplexNoise, FlatQueue, vec3 } from '../lib/redblob.lib.js';
 import aleaPRNG from './aleaPRNG-1.1.js';
 import { makeSphere } from './sphere-mesh.js';
 import {

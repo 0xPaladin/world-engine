@@ -48,6 +48,8 @@ Changing the planet type triggers a full regeneration: new mesh, map, colormap t
 ```
 engine/
   index.js              — Public API entry point
+  lib/
+    redblob.lib.js      — Bundled vendor deps (simplex-noise, flatqueue, gl-matrix, delaunator, @redblobgames/dual-mesh)
   core/
     defaults.js         → All shared default values (seed, N, P, jitter, colors, spectral, sun params)
     planet.js           → mesh gen, map gen, plates, elevation, rivers, climate
@@ -91,14 +93,11 @@ server.js               → Bun static-file server (port 3333)
 
 ## Dependencies
 
-- `three` — WebGL renderer (Three.js)
-- `@redblobgames/dual-mesh` — sphere mesh (Delaunay + Voronoi)
+- `three` — WebGL renderer (Three.js) — loaded via CDN importmap
+- `lil-gui` — GUI controls — loaded via CDN importmap
+- `engine/lib/redblob.lib.js` — bundled vendor deps: simplex-noise, flatqueue, gl-matrix, delaunator, @redblobgames/dual-mesh
 - `aleaPRNG-1.1.js` — bundled Alea PRNG
-- `gl-matrix` — matrix/vector math
-- `delaunator` — Delaunay triangulation
-- `simplex-noise` — 3D noise
-- `flatqueue` — priority queue (Dijkstra)
-- `esbuild` — bundler
+- `esbuild` — bundler (dev dependency)
 
 ## Setup
 
@@ -118,7 +117,7 @@ npx esbuild engine/index.js --bundle --minify --sourcemap --outfile=dist/_bundle
 
 Full app bundle (engine + GUI):
 ```bash
-npx esbuild src/main.js --bundle --minify --sourcemap --outfile=dist/_bundle.js --external:three --external:three/addons/
+npx esbuild src/main.js --bundle --minify --sourcemap --outfile=dist/_bundle.js --external:three --external:three/addons/ --external:lil-gui
 ```
 
 Or use the build script:
@@ -193,7 +192,7 @@ Names are generated from seeded syllable templates (placeholder for full Azgaar 
 
 ## Key Technical Notes
 
-- ESM interop: `flatqueue` requires `{default: FlatQueue}` import syntax
+- Bundled deps imported from `engine/lib/redblob.lib.js` (e.g. `import { SimplexNoise, FlatQueue, vec3 } from '../lib/redblob.lib.js'`)
 - Temperature uses multiplicative scaling on land only (`e / (1+temp*3)` or `e * (1+abs(temp)*2)`) to avoid flooding
 - Water level subtracts from raw elevation before temperature scaling; affects coastline, rivers, and biome detection
 - Rivers skip sides where both endpoints have adjusted elevation < 0 (fully submerged)

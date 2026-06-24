@@ -1,5 +1,5 @@
 // Population simulation: cultures, states, burgs, provinces via Dijkstra expansion
-import { default as FlatQueue } from 'flatqueue';
+import { FlatQueue } from '../lib/redblob.lib.js';
 import aleaPRNG from './aleaPRNG-1.1.js';
 
 const C = 'bcdfghjklmnpqrstvwxz';

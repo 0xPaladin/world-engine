@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import GUI from 'lil-gui';
+import { XGUI } from 'lil-xgui';
 import * as planet from '../engine/core/planet.js';
 import * as renderer from '../engine/render/renderer.js';
 import { generatePopulation } from '../engine/core/world-population.js';
 import { GAS_GIANT_DEFAULTS, BARREN_DEFAULTS, AIRLESS_DEFAULTS, SPECTRAL_COLORS, SPECTRAL_DEFAULTS, SUN_DEFAULTS, DEFAULT_NUM_CULTURES, DEFAULT_NUM_STATES, DEFAULT_MAX_BURGS } from '../engine/core/defaults.js';
-import { XGUI } from "lil-xgui";
 
 const canvas = document.getElementById('output');
 
@@ -310,7 +311,7 @@ const PARAMS = {
     },
 };
 
-const gui = new XGUI({ title: 'Planet Generator', width: 300 });  //, mode: "accordion" 
+const gui = new GUI({ title: 'Planet Generator', width: 300 }); 
 
 _selectedSaveCtrl = gui.add(PARAMS, 'selectedSave', ['']).name('Saved Worlds');
 _selectedSaveCtrl.domElement.classList.add("w-70");

@@ -5,6 +5,8 @@
 ```
 engine/                 ← Standalone library (generation + rendering, no GUI)
   index.js              ← Public API entry point
+  lib/
+    redblob.lib.js      ← Bundled vendor deps (simplex-noise, flatqueue, gl-matrix, delaunator, @redblobgames/dual-mesh)
   core/                 ← Planet generation & simulation
     defaults.js         → All shared default values (seed, N, P, jitter, colors, spectral, sun params)
     planet.js           → mesh gen, map gen, plates, elevation, rivers, climate
@@ -35,20 +37,21 @@ Use engine standalone: `import { generateMesh, initRenderer, render } from './en
 
 - Bun dev server on port 3333 (`bun server.js`)
   - Bun auto-compiles ESM imports and CommonJS `require()` on-the-fly — no separate build step needed
-  - External modules (three, three/addons) loaded via CDN importmap
+  - `three`, `three/addons`, and `lil-gui` loaded via CDN importmap; all other deps in `engine/lib/redblob.lib.js`
 - Dev server: `http://localhost:3333/`
 
 ## Build
 
 - `bash build.sh` produces:
-  - `build/_bundle.engine.js` — standalone engine (75KB minified)
-  - `build/_bundle.js` — full app with GUI (93KB minified)
+  - `dist/_bundle.engine.js` — standalone engine (77KB minified)
+  - `dist/_bundle.js` — full app with GUI (92KB minified)
 
 ## Code Style
 
 - No comments in source code
 - ES modules everywhere
 - External ESM requires explicit `.default` import (e.g. `{default: FlatQueue}`)
+- Bundled deps imported from `engine/lib/redblob.lib.js` (SimplexNoise, FlatQueue, vec3, Delaunator, TriangleMesh)
 - Expose public API functions on `window` object
 - No TypeScript, no linting config
 - Biome lookups via `colormap.js` RGBA texture (elevation × moisture)

@@ -8,13 +8,8 @@
         "./engine/*": "./engine/*"
     },
     "dependencies": {
-        "@redblobgames/dual-mesh": "https://github.com/redblobgames/dual-mesh",
-        "@redblobgames/prng": "https://github.com/redblobgames/prng",
-        "delaunator": "^3.0",
-        "flatqueue": "*",
-        "gl-matrix": "*",
+        "lil-gui": "^0.21.0",
         "lil-xgui": "^0.1.0",
-        "simplex-noise": "^2",
         "three": "0.160.0"
     },
     "devDependencies": {

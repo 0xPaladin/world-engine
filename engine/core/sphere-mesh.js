@@ -1,6 +1,5 @@
 // Fibonacci sphere mesh generation with Delaunay triangulation and Voronoi dual
-import Delaunator from 'delaunator';
-import TriangleMesh from '@redblobgames/dual-mesh';
+import { Delaunator, TriangleMesh } from '../lib/redblob.lib.js';
 
 let _randomLat = [], _randomLon = [];
 // Generate N approximately-equally-spaced points on a sphere using the Fibonacci spiral method with optional jitter
