@@ -6,10 +6,10 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 
 ## Features
 
-- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world with barren/hostile subtype), and gas giant — each with its own generation pipeline and colormap
+- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world with barren/hostile subtype), gas giant (procedural shader), and star (procedural sun with rays/flares/glow) — each with its own generation pipeline and colormap
 - **Procedural terrain**: tectonic plates, elevation, moisture, temperature, rivers on a Fibonacci sphere mesh
 - **Interactive controls**: planet type, seed, region count, plate count, jitter, planet type
-- **Save/Load**: persist all world parameters to browser storage via localforage; name, save, and load worlds
+- **Save/Load**: persist all world parameters to `saves/` directory via server API; name, save, and load worlds
 - **Climate sliders**: temperature (multiplicative on land only), rainfall (moisture shift), water level (coastline shift) — all update in real-time
 - **Population generation**: multi-source Dijkstra culture expansion, state formation, burg/settlement placement, province borders (Earth-like only)
 - **Culture overlay**: flat-color Voronoi regions colored by culture; toggle on/off
@@ -25,18 +25,19 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 
 ## Planet Types
 
-| Type       | Colormap        | Elevation model       | Plates | Moisture | Rivers | Population | Cloud sphere |
-| ---------- | --------------- | --------------------- | ------ | -------- | ------ | ---------- | ------------ |
-| Earth-like | Green/blue      | Plate collision + FBM | Yes    | 0.15–1.0 | Yes    | Yes        | no |
+| Type       | Colormap         | Elevation model       | Plates | Moisture | Rivers | Population | Cloud sphere |
+| ---------- | ---------------- | --------------------- | ------ | -------- | ------ | ---------- | ------------ |
+| Earth-like | Green/blue       | Plate collision + FBM | Yes    | 0.15–1.0 | Yes    | Yes        | no |
 | Airless    | Grayscale (user-colorable) | Craters + FBM baseline | No    | 0        | No     | No         | no |
 | Barren     | Red/orange (user-colorable) | Plate + volcano boost or volcanic domes (per subtype) | All continental | 0–0.15 | No | No | only when subtype=hostile |
-| Gas Giant  | Procedural      | Zero elevation, bands + noise | — | 0 | No | No | no |
+| Gas Giant  | Procedural       | Zero elevation, bands + noise | — | 0 | No | No | no |
+| Star       | Procedural (4D simplex FBM) | Uniform 0.5 | Single flat | 0 | No | No | no |
 
 Barren has a **subtype** dropdown (barren/hostile) accessible via the "Barren Type" folder:
 - **barren subtype**: volcano-boosted elevation (1.5–3× on 40% of plate centers), trace moisture with polar ice, red/orange palette
 - **hostile subtype**: volcanic dome elevation constructs, zero moisture, yellow/orange biomes, translucent noise cloud sphere
 
-Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays. Gas Giant uses a procedural fragment shader (bands + noise) instead of a mesh-based colormap; the Planet, Climate, and Overlays folders are hidden when selected.
+Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays. Gas Giant uses a procedural fragment shader (bands + noise) instead of a mesh-based colormap; the Planet, Climate, and Overlays folders are hidden when selected. Star uses a fully procedural 4D simplex FBM shader with animated rays, flares, and glow — no colormap or climate controls.
 
 ## Architecture
 
@@ -46,6 +47,7 @@ src/main.js          — Entry point, window.* API, Three.js scene init, lil-gui
 src/planet.js        — Simulation: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
 src/renderer.js      — Three.js scene, camera, materials, draw pipeline, overlay, cloud sphere
 src/shaders.js       — Three.js ShaderMaterial: colormap surface, lines, overlays, cloud shader
+src/sun-shaders.js   — Star/sun ShaderMaterials and geometry generators (sphere, rays, flares, glow)
 colormap-texture.js  — Three.js DataTexture wrapper for per-type biome lookup
 index.html           — SPA layout, controls, canvas (OrbitControls)
 ```
@@ -114,7 +116,7 @@ bun server.js
 | Saved Worlds     | Dropdown of previously saved worlds             |
 | Save World       | Persist all settings to localforage             |
 | Load World       | Restore a saved world                           |
-| Planet Type      | Earth-like, Airless, Barren, Gas Giant          |
+| Planet Type      | Earth-like, Airless, Barren, Gas Giant, Star    |
 | Seed             | PRNG seed for deterministic generation          |
 | New Planet       | Increment seed + full regeneration + population |
 | Regions          | Number of Voronoi regions (100–100,000)         |
@@ -126,6 +128,19 @@ bun server.js
 | Barren Subtype   | Barren or Hostile (terrain + biome variant) ²   |
 | Barren Colors A/B/C | Three user-colorable elevation stops (low/mid/high) ² |
 | Airless Colors A/B/C | Three user-colorable elevation stops (low/mid/high) ³ |
+| Spectral Type    | Harvard spectral class (O/B/A/F/G/K/M/D) ⁴      |
+| Brightness       | Star brightness multiplier ⁴                     |
+| Noise Scale      | Star surface noise frequency ⁴                   |
+| Noise Contrast   | Star surface noise contrast ⁴                    |
+| Tint             | Star surface tint multiplier ⁴                   |
+| Fresnel          | Star edge glow influence ⁴                       |
+| Glow Radius      | Star aura size ⁴                                 |
+| Glow Brightness  | Star aura intensity ⁴                            |
+| Ray Length       | Star ray length ⁴                                |
+| Ray Width        | Star ray width ⁴                                 |
+| Rays Opacity     | Star ray transparency ⁴                          |
+| Flare Amp        | Star flare amplitude ⁴                           |
+| Flares Opacity   | Star flare transparency ⁴                        |
 | Cultures         | Number of cultures for population gen (2–40) ¹  |
 | Apply Changes    | Re-run population/culture simulation ¹          |
 | Culture overlay  | Color Voronoi cells by culture ¹                |
@@ -142,6 +157,7 @@ bun server.js
 ¹ Population/culture/state/province/burg overlays — Earth-like only
 ² Barren type folder — visible only when Planet Type is Barren
 ³ Airless Colors folder — visible only when Planet Type is Airless
+⁴ Star folder — visible only when Planet Type is Star
 
 ## Population Generation
 
