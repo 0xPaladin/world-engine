@@ -9,12 +9,10 @@
         "delaunator": "^3.0",
         "flatqueue": "*",
         "gl-matrix": "*",
-        "lil-xgui": "^0.1.0",
-        "localforage": "^1.10.0",
+        "lil-gui": "^0.21.0",
         "regl": "1.7.0",
-        "simplex-noise": "^2"
+        "simplex-noise": "^2",
+        "three": "0.160.0"
     },
-    "devDependencies": {
-        "esbuild": "^0.28.1"
-    }
+    "devDependencies": {}
 }

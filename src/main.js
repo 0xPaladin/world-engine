@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import * as planet from './planet.js';
 import * as renderer from './renderer.js';
 import { generatePopulation } from '../world-population.js';
-import { XGUI } from 'lil-xgui';
-import localforage from 'localforage';
+import GUI from 'lil-gui';
 
 const canvas = document.getElementById('output');
 
@@ -62,8 +61,8 @@ function updateAllControllers(g) {
 }
 
 async function refreshSavedNames() {
-    const keys = await localforage.keys();
-    const names = keys.filter(k => k.startsWith('world_')).map(k => k.slice(6));
+    const res = await fetch('/api/saves');
+    const names = await res.json();
     if (_selectedSaveCtrl) {
         _selectedSaveCtrl.options(names.length > 0 ? names : ['']);
         if (PARAMS.selectedSave && names.includes(PARAMS.selectedSave)) {
@@ -113,7 +112,11 @@ async function doSave() {
         airlessColorC: PARAMS.airlessColorC,
         barrenSubtype: PARAMS.barrenSubtype,
     };
-    await localforage.setItem('world_' + name, data);
+    await fetch('/api/saves/' + encodeURIComponent(name), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
     PARAMS.selectedSave = name;
     await refreshSavedNames();
 }
@@ -121,8 +124,9 @@ async function doSave() {
 async function doLoad() {
     const name = PARAMS.selectedSave;
     if (!name) return;
-    const data = await localforage.getItem('world_' + name);
-    if (!data) return;
+    const res = await fetch('/api/saves/' + encodeURIComponent(name));
+    if (!res.ok) return;
+    const data = await res.json();
 
     planet.setPlanetType(data.planetType);
     planet.setBarrenSubtype(data.barrenSubtype || 'barren');

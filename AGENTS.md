@@ -1,32 +1,13 @@
 # Agent Conventions
 
-## Build
+## Server
 
-Three.js is loaded via import map in `index.html` (CDN), so esbuild must externalize it.
-
-### Linux
-```bash
-# Build Three.js bundle (default)
-node_modules/.bin/esbuild src/main.js --bundle --sourcemap --format=esm --outfile=build/_bundle.js --external:three --external:three/addons/*
-
-# Build regl bundle (preserved)
-node_modules/.bin/esbuild regl/planet-generation.js --bundle --sourcemap --outfile=build/_bundle.regl.js
-```
-
-### Windows
-```powershell
-# Build Three.js bundle (default)
-& "node_modules\@esbuild\win32-x64\esbuild.exe" src/main.js --bundle --sourcemap --format=esm --outfile=build/_bundle.js --external:three --external:three/addons/*
-
-# Build regl bundle (preserved)
-& "node_modules\@esbuild\win32-x64\esbuild.exe" regl/planet-generation.js --bundle --sourcemap --outfile=build/_bundle.regl.js
-```
-
-### Server
-
-- Static file server on port 3333 (`bun server.js`)
+- Bun server on port 3333 (`bun server.js`)
+  - Bundles `src/main.js` on-the-fly (no separate build step)
+  - Also bundles `regl/planet-generation.js` on-the-fly at `/build/_bundle.regl.js`
+  - External modules (three, three/addons) loaded via CDN importmap
 - Three.js version: `http://localhost:3333/`
-- regl version (preserved): `http://localhost:3333/regl/index.html`
+- regl version: `http://localhost:3333/regl/index.html`
 
 ## Code Style
 
@@ -155,12 +136,13 @@ window._population = {
 
 ## Save / Load
 
-- `localforage` used for persistent browser storage of world settings
-- Each save stored under key `world_<name>` containing all planet parameters (type, seed, regions, plates, jitter, draw mode, climate, overlays, gas giant params, barren subtype, barren color triple, airless color triple, culture count)
+- Saves stored as JSON files in `saves/` directory via server API
+- API endpoints: `GET /api/saves` (list), `GET /api/saves/:name` (load), `PUT /api/saves/:name` (save)
+- Each file contains all planet parameters (type, seed, regions, plates, jitter, draw mode, climate, overlays, gas giant params, barren subtype, barren color triple, airless color triple, culture count)
 - World name input, Saved Worlds dropdown, Save/Load buttons at top level of lil-gui
-- `refreshSavedNames()` queries localforage keys and updates dropdown options
-- `doSave()` serializes current planet state to localforage
-- `doLoad()` reads a save, applies all settings via planet setters, regenerates mesh, rebuilds rendering, restores colormap colors for barren and airless, and syncs all GUI controllers via `updateAllControllers()`
+- `refreshSavedNames()` fetches save list from server
+- `doSave()` PUTs current planet state to server
+- `doLoad()` GETs a save, applies all settings via planet setters, regenerates mesh, rebuilds rendering, restores colormap colors for barren and airless, and syncs all GUI controllers via `updateAllControllers()`
 
 ## River Rendering
 
