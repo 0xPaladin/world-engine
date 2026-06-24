@@ -102,12 +102,12 @@ npm install
 
 Engine bundle (standalone, no GUI):
 ```bash
-node_modules/.bin/esbuild engine/index.js --bundle --minify --sourcemap --outfile=build/_bundle.engine.js --external:three --external:three/addons/
+npx esbuild engine/index.js --bundle --minify --sourcemap --outfile=dist/_bundle.engine.js --external:three --external:three/addons/
 ```
 
 Full app bundle (engine + GUI):
 ```bash
-node_modules/.bin/esbuild src/main.js --bundle --minify --sourcemap --outfile=build/_bundle.js --external:three --external:three/addons/
+npx esbuild src/main.js --bundle --minify --sourcemap --outfile=dist/_bundle.js --external:three --external:three/addons/
 ```
 
 Or use the build script:
