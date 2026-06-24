@@ -2,8 +2,8 @@
 
 ## Server
 
-- Bun server on port 3333 (`bun server.js`)
-  - Bundles `src/main.js` on-the-fly (no separate build step)
+- Bun dev server on port 3333 (`bun server.js`)
+  - Bun auto-compiles ESM imports and CommonJS `require()` on-the-fly — no separate build step needed
   - Also bundles `regl/planet-generation.js` on-the-fly at `/build/_bundle.regl.js`
   - External modules (three, three/addons) loaded via CDN importmap
 - Three.js version: `http://localhost:3333/`
@@ -28,10 +28,11 @@
 - `aleaPRNG-1.1.js` — Alea PRNG (seeded, good statistical properties)
 
 ### Three.js version (active)
-- `src/main.js` — entry point, window.* API, Three.js scene init, lil-gui controls, save/load via localforage
+- `src/main.js` — entry point, window.* API, Three.js scene init, lil-gui controls, save/load via server API
 - `src/planet.js` — simulation code: mesh gen, map gen, plates, elevation, rivers, climate, QuadGeometry
 - `src/renderer.js` — Three.js scene, camera, materials, draw pipeline, overlay
 - `src/shaders.js` — Three.js ShaderMaterial: colormap surface, lines, overlays, gas giant
+- `src/sun-shaders.js` — Sun/star ShaderMaterials: sphere (4D simplex FBM surface, fresnel, brightness-to-color), rays, flares, glow; geometry generators for rays/flares/glow
 - `colormap-texture.js` — Three.js DataTexture from colormap.js
 
 ### regl version (preserved)
@@ -41,10 +42,10 @@
 
 ## Planet Types
 
-- 4 types: `earthlike` (default), `airless`, `barren`, `gasgiant`
+- 5 types: `earthlike` (default), `airless`, `barren`, `gasgiant`, `sun`
 - Selected via `planetType` dropdown at top level of lil-gui
 - Switching type calls `planet.setPlanetType()` → `generateMesh()` → `rebuildAll()` → `applyClimate()` → `applyPopulation()`
-- Planet and Overlays folders hidden when `gasgiant` selected; Climate folder hidden for `gasgiant` and `airless`
+- Planet and Overlays folders hidden when `gasgiant` or `sun` selected; Climate folder hidden for `gasgiant`, `airless`, and `sun`
 - `_planetType` parameter in `planet.js` — `generateMap()` dispatches on a `switch`:
 
   | Type | Elevation | Plates | Moisture | Rivers | Colormap | Cloud sphere |
@@ -53,6 +54,7 @@
   | airless | `generateCraterElevation()` (30–70 craters, bowl+rim+ejecta) | single flat plate | 0 | No | airless (user-colorable) | no |
   | barren | plate-collision + volcano boost or dome constructs via subtype | all continental | 0–0.15 | No | barren (user-colorable) | only when subtype=hostile |
   | gasgiant | zero elevation | single flat plate | 0 | No | earthlike (unused) | no |
+  | sun | uniform 0.5 | single flat plate | 0 | No | none (procedural shader) | no |
 
 ### Barren Subtype
 
@@ -63,7 +65,7 @@
 
 - Non-earthlike types skip river generation entirely (`rebuildRivers` returns early)
 - Population is only generated for `earthlike` — `window.applyPopulation` checks `planetType` and clears overlays for other types
-- `pickRegion` returns type-and-subtype-specific biome labels (e.g. "Crater Floor", "Sulfurous Plain", "Gas Giant")
+- `pickRegion` returns type-and-subtype-specific biome labels (e.g. "Crater Floor", "Sulfurous Plain", "Gas Giant", "Stellar Surface")
 
 ### Gas Giant
 
@@ -73,6 +75,23 @@
 - Climate sliders are hidden when `gasgiant` is selected
 - `applyClimate()`, `rebuildRivers()`, and population generation are all skipped for gasgiant
 - Biome label in picker returns "Gas Giant"
+
+### Star (Sun)
+
+- Uses `ShaderMaterial` with a fully procedural GLSL fragment shader — 4D simplex noise FBM (5 octaves) on 3 rotating layers, fresnel glow, brightness-to-color mapping (b → b² → b⁴ curve)
+- Sun sphere parameters (Brightness, Noise Scale, Noise Contrast, Tint, Fresnel) exposed via uniforms; updated live from GUI
+- Additional visual elements: animated rays (`LineSegments` with twisted-sine noise ribbon curves), animated flares (`LineSegments` with view-facing strips), and a camera-facing glow aura (radial falloff quad)
+- Sun rays/flares parameters (Ray Length, Ray Width, Ray Opacity, Flare Amp, Flare Opacity) and glow parameters (Glow Radius, Glow Brightness) exposed via Sun GUI folder
+- Geometry for rays and flares generated procedurally with seeded random anchor positions
+- `uTime` uniform updated each frame drives noise layer rotation and ray/flare animation
+- `uViewProjection` and `uCamPos` uniforms synced from camera each frame for view-facing billboarding
+- Sun GUI folder (hidden for other types) provides all controls plus a "Spectral Type" dropdown (O/B/A/F/G/K/M/D — defaults to G-type yellow)
+- Spectral colors defined in `SPECTRAL_COLORS` map in `main.js` (O=#9bb0ff, B=#aabfff, A=#f8f7ff, F=#fff4e8, G=#fff4b5, K=#ffc66a, M=#ff8b5a, D=#ffffff)
+- `uSpectralColor` uniform on all four sun materials, multiplied into final output via `brightnessToColor()` and `vColor` multiply
+- `spectralColor` and `spectralType` saved/loaded with world saves
+- `applyClimate()`, `rebuildRivers()`, and population generation are all skipped for sun
+- Biome label in picker returns "Stellar Surface"
+- No colormap — surface is purely procedural
 
 ### Colormaps
 

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createPlanetSurfaceMaterial, createLineMaterial, createOverlayMaterial, createCloudMaterial, createGasGiantMaterial } from './shaders.js';
 import { generateVoronoiGeometry } from './planet.js';
 import { rebuildColormapTexture } from '../colormap-texture.js';
+import { generateSunSphereMaterial, generateSunRaysGeometry, generateSunFlaresGeometry, generateSunGlowGeometry, createSunRaysMaterial, createSunFlaresMaterial, createSunGlowMaterial } from './sun-shaders.js';
 
 let renderer, scene, camera, controls;
 let planetMaterial, lineMaterial, overlayMaterial;
@@ -22,6 +23,12 @@ let provinceBorderLines = null;
 let burgOverlayGroup = null;
 let cloudMesh = null;
 let cloudMaterial = null;
+
+let sunGroup = null;
+let sunSphereMaterial = null;
+let sunRaysMesh = null;
+let sunFlaresMesh = null;
+let sunGlowMesh = null;
 
 let currentDrawMode = 'quads';
 let _initialized = false;
@@ -118,8 +125,30 @@ let _clock = new THREE.Clock();
 export function render() {
     if (!_initialized) return;
     controls.update();
+    const t = _clock.getElapsedTime();
     if (cloudMaterial) {
-        cloudMaterial.uniforms.u_time.value = _clock.getElapsedTime();
+        cloudMaterial.uniforms.u_time.value = t;
+    }
+    if (sunSphereMaterial) {
+        sunSphereMaterial.uniforms.uTime.value = t;
+    }
+    const vpMatrix = new THREE.Matrix4().multiplyMatrices(
+        camera.projectionMatrix, camera.matrixWorldInverse
+    );
+    if (sunRaysMesh && sunRaysMesh.material) {
+        sunRaysMesh.material.uniforms.uTime.value = t;
+        sunRaysMesh.material.uniforms.uCamPos.value.copy(camera.position);
+        sunRaysMesh.material.uniforms.uViewProjection.value.copy(vpMatrix);
+    }
+    if (sunFlaresMesh && sunFlaresMesh.material) {
+        sunFlaresMesh.material.uniforms.uTime.value = t;
+        sunFlaresMesh.material.uniforms.uCamPos.value.copy(camera.position);
+        sunFlaresMesh.material.uniforms.uViewProjection.value.copy(vpMatrix);
+    }
+    if (sunGlowMesh && sunGlowMesh.material) {
+        sunGlowMesh.material.uniforms.uCamPos.value.copy(camera.position);
+        sunGlowMesh.material.uniforms.uCamUp.value.copy(camera.up);
+        sunGlowMesh.material.uniforms.uViewProjection.value.copy(vpMatrix);
     }
     renderer.render(scene, camera);
 }
@@ -138,10 +167,18 @@ export function rebuildPlanet(meshData, mapData, quadGeom, mode, tempOff, rainOf
     removeFromScene(quadsMesh);
     removeFromScene(centroidMesh);
     removeFromScene(gasGiantMesh);
+    removeFromScene(sunGroup);
     quadsMesh = null;
     centroidMesh = null;
     gasGiantMesh = null;
     gasGiantMaterial = null;
+    sunGroup = null;
+    sunSphereMaterial = null;
+
+    if (planetType === 'sun') {
+        rebuildSun(meshData, mapData, quadGeom, mode);
+        return;
+    }
 
     if (planetType === 'gasgiant') {
         const p = _gasGiantParams;
@@ -184,7 +221,7 @@ export function rebuildPlanet(meshData, mapData, quadGeom, mode, tempOff, rainOf
 }
 
 export function updateClimate(quadGeom) {
-    if (gasGiantMesh) return;
+    if (gasGiantMesh || sunGroup) return;
     if (quadsMesh && quadsMesh.geometry) {
         const uvAttr = quadsMesh.geometry.attributes.uv;
         uvAttr.array.set(quadGeom.tm);
@@ -200,11 +237,133 @@ export function hasMesh(mode) {
     return mode === 'quads' ? !!quadsMesh : !!centroidMesh;
 }
 
+let _sunParams = {
+    numRays: 80,
+    numFlares: 40,
+    hueSpread: 0.25,
+    hue: 0.05,
+    rayLength: 1.5,
+    rayWidth: 0.02,
+    raysOpacity: 0.5,
+    flareWidth: 0.03,
+    flareAmp: 0.3,
+    flaresOpacity: 0.4,
+    noiseFreq: 1.5,
+    noiseAmp: 1.0,
+    glowTint: 1.2,
+    glowBrightness: 1.5,
+    glowFalloff: 2.0,
+    glowRadius: 0.5,
+    sphereFresnelPower: 1.5,
+    sphereFresnelInfluence: 0.4,
+    sphereTint: 1.8,
+    sphereBase: 0.05,
+    sphereBrightnessOffset: 0.0,
+    sphereBrightness: 3.0,
+    sphereScale: 2.0,
+    sphereContrast: 0.15,
+    spectralColor: new THREE.Color(1, 1, 1),
+};
+
+export function getSunParams() { return _sunParams; }
+
+export function updateSunParams(params) {
+    Object.assign(_sunParams, params);
+    if (_sunParams.spectralColor && !_sunParams.spectralColor.isColor) {
+        _sunParams.spectralColor = new THREE.Color(_sunParams.spectralColor);
+    }
+    if (sunSphereMaterial) {
+        sunSphereMaterial.uniforms.uFresnelPower.value = _sunParams.sphereFresnelPower;
+        sunSphereMaterial.uniforms.uFresnelInfluence.value = _sunParams.sphereFresnelInfluence;
+        sunSphereMaterial.uniforms.uTint.value = _sunParams.sphereTint;
+        sunSphereMaterial.uniforms.uBase.value = _sunParams.sphereBase;
+        sunSphereMaterial.uniforms.uBrightnessOffset.value = _sunParams.sphereBrightnessOffset;
+        sunSphereMaterial.uniforms.uBrightness.value = _sunParams.sphereBrightness;
+        sunSphereMaterial.uniforms.uScale.value = _sunParams.sphereScale;
+        sunSphereMaterial.uniforms.uContrast.value = _sunParams.sphereContrast;
+        sunSphereMaterial.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
+    }
+    if (sunGlowMesh && sunGlowMesh.material) {
+        sunGlowMesh.material.uniforms.uTint.value = _sunParams.glowTint;
+        sunGlowMesh.material.uniforms.uBrightness.value = _sunParams.glowBrightness;
+        sunGlowMesh.material.uniforms.uFalloffColor.value = _sunParams.glowFalloff;
+        sunGlowMesh.material.uniforms.uRadius.value = _sunParams.glowRadius;
+        sunGlowMesh.material.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
+    }
+    if (sunRaysMesh && sunRaysMesh.material) {
+        sunRaysMesh.material.uniforms.uWidth.value = _sunParams.rayWidth;
+        sunRaysMesh.material.uniforms.uLength.value = _sunParams.rayLength;
+        sunRaysMesh.material.uniforms.uOpacity.value = _sunParams.raysOpacity;
+        sunRaysMesh.material.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
+    }
+    if (sunFlaresMesh && sunFlaresMesh.material) {
+        sunFlaresMesh.material.uniforms.uWidth.value = _sunParams.flareWidth;
+        sunFlaresMesh.material.uniforms.uAmp.value = _sunParams.flareAmp;
+        sunFlaresMesh.material.uniforms.uOpacity.value = _sunParams.flaresOpacity;
+        sunFlaresMesh.material.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
+    }
+}
+
+function rebuildSun(meshData, mapData, quadGeom, mode) {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(quadGeom.xyz), 3));
+    geom.setIndex(new THREE.BufferAttribute(new Uint32Array(quadGeom.I), 1));
+    geom.computeVertexNormals();
+
+    const seed = mapData._sunSeed || 123;
+    sunSphereMaterial = generateSunSphereMaterial(_sunParams.spectralColor);
+    const sphereMesh = new THREE.Mesh(geom, sunSphereMaterial);
+
+    const raysGeom = generateSunRaysGeometry(_sunParams.numRays, seed);
+    const raysMat = createSunRaysMaterial({
+        hueSpread: _sunParams.hueSpread,
+        hue: _sunParams.hue,
+        length: _sunParams.rayLength,
+        width: _sunParams.rayWidth,
+        noiseFreq: _sunParams.noiseFreq,
+        noiseAmp: _sunParams.noiseAmp,
+        opacity: _sunParams.raysOpacity,
+        spectralColor: _sunParams.spectralColor,
+    });
+    sunRaysMesh = new THREE.LineSegments(raysGeom, raysMat);
+
+    const flaresGeom = generateSunFlaresGeometry(_sunParams.numFlares, 123);
+    const flaresMat = createSunFlaresMaterial({
+        hueSpread: _sunParams.hueSpread,
+        hue: _sunParams.hue,
+        width: _sunParams.flareWidth,
+        amp: _sunParams.flareAmp,
+        noiseFreq: _sunParams.noiseFreq,
+        noiseAmp: _sunParams.noiseAmp,
+        opacity: _sunParams.flaresOpacity,
+        spectralColor: _sunParams.spectralColor,
+    });
+    sunFlaresMesh = new THREE.LineSegments(flaresGeom, flaresMat);
+
+    const glowGeom = generateSunGlowGeometry();
+    const glowMat = createSunGlowMaterial({
+        tint: _sunParams.glowTint,
+        brightness: _sunParams.glowBrightness,
+        falloffColor: _sunParams.glowFalloff,
+        radius: _sunParams.glowRadius,
+        spectralColor: _sunParams.spectralColor,
+    });
+    sunGlowMesh = new THREE.Mesh(glowGeom, glowMat);
+
+    sunGroup = new THREE.Group();
+    sunGroup.add(sphereMesh);
+    sunGroup.add(sunRaysMesh);
+    sunGroup.add(sunFlaresMesh);
+    sunGroup.add(sunGlowMesh);
+    scene.add(sunGroup);
+}
+
 export function setDrawMode(mode) {
     currentDrawMode = mode;
     if (quadsMesh) quadsMesh.visible = (mode === 'quads');
     if (centroidMesh) centroidMesh.visible = (mode === 'centroid');
     if (gasGiantMesh) gasGiantMesh.visible = true;
+    if (sunGroup) sunGroup.visible = true;
 }
 
 function buildLineGeometryFromArrays(positions, colors) {
@@ -268,6 +427,8 @@ export function rebuildCloudSphere(type, seed, barrenSubtype) {
     cloudMesh = null;
     cloudMaterial = null;
 
+    if (type === 'sun') return;
+
     const isHostile = type === 'hostile' || (type === 'barren' && barrenSubtype === 'hostile');
     if (!isHostile) return;
 
@@ -279,7 +440,7 @@ export function rebuildCloudSphere(type, seed, barrenSubtype) {
 }
 
 export function updateColormapTexture(type) {
-    if (type === 'gasgiant') return;
+    if (type === 'gasgiant' || type === 'sun') return;
     const newTexture = rebuildColormapTexture(
         type,
         _colormapColorParams.colorA,

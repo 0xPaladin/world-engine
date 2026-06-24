@@ -13,6 +13,9 @@ function rebuildAll() {
     if (ptype === 'gasgiant') {
         renderer.updateGasGiantParams({ seed: PARAMS.seed });
     }
+    if (ptype === 'sun') {
+        renderer.updateSunParams({ seed: PARAMS.seed, spectralColor: PARAMS.spectralColor });
+    }
     renderer.rebuildPlanet(
         planet.mesh, planet.map, planet.quadGeometry,
         planet.getDrawMode(),
@@ -25,7 +28,8 @@ function rebuildAll() {
 }
 
 function applyClimate() {
-    if (planet.getPlanetType() === 'gasgiant') return;
+    const ptype = planet.getPlanetType();
+    if (ptype === 'gasgiant' || ptype === 'sun') return;
     const mesh = planet.mesh;
     const map = planet.map;
     const quadGeometry = planet.quadGeometry;
@@ -39,7 +43,7 @@ function applyClimate() {
         tempOffset, rainOffset, waterLevel
     );
     renderer.updateClimate(quadGeometry);
-    if (planet.getPlanetType() === 'gasgiant') return;
+    if (ptype === 'gasgiant' || ptype === 'sun') return;
     if (planet.getDrawMode() === 'centroid') {
         renderer.rebuildPlanet(
             planet.mesh, planet.map, planet.quadGeometry,
@@ -111,6 +115,31 @@ async function doSave() {
         airlessColorB: PARAMS.airlessColorB,
         airlessColorC: PARAMS.airlessColorC,
         barrenSubtype: PARAMS.barrenSubtype,
+        ...SUN_DEFAULTS,
+        hueSpread: PARAMS.hueSpread,
+        hue: PARAMS.hue,
+        rayLength: PARAMS.rayLength,
+        rayWidth: PARAMS.rayWidth,
+        raysOpacity: PARAMS.raysOpacity,
+        flareWidth: PARAMS.flareWidth,
+        flareAmp: PARAMS.flareAmp,
+        flaresOpacity: PARAMS.flaresOpacity,
+        noiseFreq: PARAMS.noiseFreq,
+        noiseAmp: PARAMS.noiseAmp,
+        glowTint: PARAMS.glowTint,
+        glowBrightness: PARAMS.glowBrightness,
+        glowFalloff: PARAMS.glowFalloff,
+        glowRadius: PARAMS.glowRadius,
+        sphereFresnelPower: PARAMS.sphereFresnelPower,
+        sphereFresnelInfluence: PARAMS.sphereFresnelInfluence,
+        sphereTint: PARAMS.sphereTint,
+        sphereBase: PARAMS.sphereBase,
+        sphereBrightnessOffset: PARAMS.sphereBrightnessOffset,
+        sphereBrightness: PARAMS.sphereBrightness,
+        sphereScale: PARAMS.sphereScale,
+        sphereContrast: PARAMS.sphereContrast,
+        spectralType: PARAMS.spectralType,
+        spectralColor: PARAMS.spectralColor,
     };
     await fetch('/api/saves/' + encodeURIComponent(name), {
         method: 'PUT',
@@ -183,7 +212,57 @@ async function doLoad() {
     PARAMS.airlessColorB = data.airlessColorB || AIRLESS_DEFAULTS.colorB;
     PARAMS.airlessColorC = data.airlessColorC || AIRLESS_DEFAULTS.colorC;
     PARAMS.barrenSubtype = data.barrenSubtype || 'barren';
+    PARAMS.hueSpread = data.hueSpread || SUN_DEFAULTS.hueSpread;
+    PARAMS.hue = data.hue || SUN_DEFAULTS.hue;
+    PARAMS.rayLength = data.rayLength || SUN_DEFAULTS.rayLength;
+    PARAMS.rayWidth = data.rayWidth || SUN_DEFAULTS.rayWidth;
+    PARAMS.raysOpacity = data.raysOpacity || SUN_DEFAULTS.raysOpacity;
+    PARAMS.flareWidth = data.flareWidth || SUN_DEFAULTS.flareWidth;
+    PARAMS.flareAmp = data.flareAmp || SUN_DEFAULTS.flareAmp;
+    PARAMS.flaresOpacity = data.flaresOpacity || SUN_DEFAULTS.flaresOpacity;
+    PARAMS.noiseFreq = data.noiseFreq || SUN_DEFAULTS.noiseFreq;
+    PARAMS.noiseAmp = data.noiseAmp || SUN_DEFAULTS.noiseAmp;
+    PARAMS.glowTint = data.glowTint || SUN_DEFAULTS.glowTint;
+    PARAMS.glowBrightness = data.glowBrightness || SUN_DEFAULTS.glowBrightness;
+    PARAMS.glowFalloff = data.glowFalloff || SUN_DEFAULTS.glowFalloff;
+    PARAMS.glowRadius = data.glowRadius || SUN_DEFAULTS.glowRadius;
+    PARAMS.sphereFresnelPower = data.sphereFresnelPower || SUN_DEFAULTS.sphereFresnelPower;
+    PARAMS.sphereFresnelInfluence = data.sphereFresnelInfluence || SUN_DEFAULTS.sphereFresnelInfluence;
+    PARAMS.sphereTint = data.sphereTint || SUN_DEFAULTS.sphereTint;
+    PARAMS.sphereBase = data.sphereBase || SUN_DEFAULTS.sphereBase;
+    PARAMS.sphereBrightnessOffset = data.sphereBrightnessOffset || SUN_DEFAULTS.sphereBrightnessOffset;
+    PARAMS.sphereBrightness = data.sphereBrightness || SUN_DEFAULTS.sphereBrightness;
+    PARAMS.sphereScale = data.sphereScale || SUN_DEFAULTS.sphereScale;
+    PARAMS.sphereContrast = data.sphereContrast || SUN_DEFAULTS.sphereContrast;
+    PARAMS.spectralType = data.spectralType || SUN_DEFAULTS.spectralType;
+    PARAMS.spectralColor = data.spectralColor || SPECTRAL_COLORS[PARAMS.spectralType] || SPECTRAL_COLORS.G;
     PARAMS.worldName = name;
+
+    renderer.updateSunParams({
+        hueSpread: PARAMS.hueSpread,
+        hue: PARAMS.hue,
+        rayLength: PARAMS.rayLength,
+        rayWidth: PARAMS.rayWidth,
+        raysOpacity: PARAMS.raysOpacity,
+        flareWidth: PARAMS.flareWidth,
+        flareAmp: PARAMS.flareAmp,
+        flaresOpacity: PARAMS.flaresOpacity,
+        noiseFreq: PARAMS.noiseFreq,
+        noiseAmp: PARAMS.noiseAmp,
+        glowTint: PARAMS.glowTint,
+        glowBrightness: PARAMS.glowBrightness,
+        glowFalloff: PARAMS.glowFalloff,
+        glowRadius: PARAMS.glowRadius,
+        sphereFresnelPower: PARAMS.sphereFresnelPower,
+        sphereFresnelInfluence: PARAMS.sphereFresnelInfluence,
+        sphereTint: PARAMS.sphereTint,
+        sphereBase: PARAMS.sphereBase,
+        sphereBrightnessOffset: PARAMS.sphereBrightnessOffset,
+        sphereBrightness: PARAMS.sphereBrightness,
+        sphereScale: PARAMS.sphereScale,
+        sphereContrast: PARAMS.sphereContrast,
+        spectralColor: PARAMS.spectralColor,
+    });
 
     renderer.updateGasGiantParams({
         scale: data.scale,
@@ -233,6 +312,43 @@ const AIRLESS_DEFAULTS = {
     colorC: '#eeeeee',
 };
 
+const SPECTRAL_COLORS = {
+    O: '#9bb0ff',
+    B: '#aabfff',
+    A: '#f8f7ff',
+    F: '#fff4e8',
+    G: '#fff4b5',
+    K: '#ffc66a',
+    M: '#ff8b5a',
+    D: '#ffffff',
+};
+
+const SUN_DEFAULTS = {
+    hueSpread: 0.25,
+    hue: 0.05,
+    rayLength: 1.5,
+    rayWidth: 0.02,
+    raysOpacity: 0.5,
+    flareWidth: 0.03,
+    flareAmp: 0.3,
+    flaresOpacity: 0.4,
+    noiseFreq: 1.5,
+    noiseAmp: 1.0,
+    glowTint: 1.2,
+    glowBrightness: 1.5,
+    glowFalloff: 2.0,
+    glowRadius: 0.5,
+    sphereFresnelPower: 1.5,
+    sphereFresnelInfluence: 0.4,
+    sphereTint: 1.8,
+    sphereBase: 0.05,
+    sphereBrightnessOffset: 0.0,
+    sphereBrightness: 3.0,
+    sphereScale: 2.0,
+    sphereContrast: 0.15,
+    spectralType: 'G',
+};
+
 const PARAMS = {
     worldName: 'My World',
     selectedSave: '',
@@ -271,11 +387,14 @@ const PARAMS = {
     airlessColorB: AIRLESS_DEFAULTS.colorB,
     airlessColorC: AIRLESS_DEFAULTS.colorC,
     barrenSubtype: planet.getBarrenSubtype(),
+    ...SUN_DEFAULTS,
+    spectralColor: SPECTRAL_COLORS.G,
     newPlanet: () => {
         const newSeed = planet.getSeed() + 1;
         PARAMS.seed = newSeed;
         planet.setSeed(newSeed);
         renderer.updateGasGiantParams({ seed: newSeed });
+        renderer.updateSunParams({ seed: newSeed });
         planet.generateMesh();
         rebuildAll();
         applyClimate();
@@ -296,7 +415,7 @@ _selectedSaveCtrl.append(PARAMS, 'loadWorld').name('Load').domElement.classList.
 _saveNameCtrl = gui.add(PARAMS, 'worldName').name('World Name')
     .append(PARAMS, 'saveWorld').name('Save').domElement.classList.add("w-30");
 
-gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'gasgiant']).name('Planet Type').onChange(v => {
+gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'gasgiant', 'sun']).name('Planet Type').onChange(v => {
     planet.setPlanetType(v);
     PARAMS.barrenSubtype = planet.getBarrenSubtype();
     if (v === 'barren') {
@@ -322,6 +441,7 @@ gui.add(PARAMS, 'planetType', ['earthlike', 'airless', 'barren', 'gasgiant']).na
 gui.add(PARAMS, 'seed', 0, 999999, 1).name('Seed').onChange(v => {
     planet.setSeed(v);
     renderer.updateGasGiantParams({ seed: v });
+    renderer.updateSunParams({ seed: v });
     planet.generateMesh();
     rebuildAll();
     applyClimate();
@@ -340,7 +460,7 @@ fGeo.add(PARAMS, 'regions', 100, 100000, 100).name('Regions').onChange(v => {
 })
 fGeo.add(PARAMS, 'drawMode', ['quads', 'centroid']).name('Draw Mode').onChange(v => {
     planet.setDrawMode(v);
-    if (!renderer.hasMesh(v) && planet.getPlanetType() !== 'gasgiant') {
+    if (!renderer.hasMesh(v) && planet.getPlanetType() !== 'gasgiant' && planet.getPlanetType() !== 'sun') {
         renderer.rebuildPlanet(
             planet.mesh, planet.map, planet.quadGeometry,
             v,
@@ -443,6 +563,53 @@ fAirlessColors.addColor(PARAMS, 'airlessColorA').name('Color A').onChange(update
 fAirlessColors.addColor(PARAMS, 'airlessColorB').name('Color B').onChange(updateAirlessColors);
 fAirlessColors.addColor(PARAMS, 'airlessColorC').name('Color C').onChange(updateAirlessColors);
 
+function updateSun() {
+    renderer.updateSunParams({
+        hueSpread: PARAMS.hueSpread,
+        hue: PARAMS.hue,
+        rayLength: PARAMS.rayLength,
+        rayWidth: PARAMS.rayWidth,
+        raysOpacity: PARAMS.raysOpacity,
+        flareWidth: PARAMS.flareWidth,
+        flareAmp: PARAMS.flareAmp,
+        flaresOpacity: PARAMS.flaresOpacity,
+        noiseFreq: PARAMS.noiseFreq,
+        noiseAmp: PARAMS.noiseAmp,
+        glowTint: PARAMS.glowTint,
+        glowBrightness: PARAMS.glowBrightness,
+        glowFalloff: PARAMS.glowFalloff,
+        glowRadius: PARAMS.glowRadius,
+        sphereFresnelPower: PARAMS.sphereFresnelPower,
+        sphereFresnelInfluence: PARAMS.sphereFresnelInfluence,
+        sphereTint: PARAMS.sphereTint,
+        sphereBase: PARAMS.sphereBase,
+        sphereBrightnessOffset: PARAMS.sphereBrightnessOffset,
+        sphereBrightness: PARAMS.sphereBrightness,
+        sphereScale: PARAMS.sphereScale,
+        sphereContrast: PARAMS.sphereContrast,
+        spectralColor: PARAMS.spectralColor,
+    });
+}
+
+const fSun = gui.addFolder('Sun');
+fSun.add(PARAMS, 'sphereBrightness', 0, 6, 0.1).name('Brightness').onChange(updateSun);
+fSun.add(PARAMS, 'sphereScale', 0.5, 4, 0.1).name('Noise Scale').onChange(updateSun);
+fSun.add(PARAMS, 'sphereContrast', 0.01, 0.5, 0.01).name('Noise Contrast').onChange(updateSun);
+fSun.add(PARAMS, 'sphereTint', 0.5, 4, 0.1).name('Tint').onChange(updateSun);
+fSun.add(PARAMS, 'sphereFresnelInfluence', 0, 1, 0.05).name('Fresnel').onChange(updateSun);
+fSun.add(PARAMS, 'glowRadius', 0.1, 2, 0.05).name('Glow Radius').onChange(updateSun);
+fSun.add(PARAMS, 'glowBrightness', 0, 4, 0.1).name('Glow Brightness').onChange(updateSun);
+fSun.add(PARAMS, 'rayLength', 0.5, 4, 0.1).name('Ray Length').onChange(updateSun);
+fSun.add(PARAMS, 'rayWidth', 0.005, 0.1, 0.005).name('Ray Width').onChange(updateSun);
+fSun.add(PARAMS, 'raysOpacity', 0, 1, 0.05).name('Rays Opacity').onChange(updateSun);
+fSun.add(PARAMS, 'flareAmp', 0, 1, 0.05).name('Flare Amp').onChange(updateSun);
+fSun.add(PARAMS, 'flaresOpacity', 0, 1, 0.05).name('Flares Opacity').onChange(updateSun);
+fSun.add(PARAMS, 'spectralType', ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'D']).name('Spectral Type').onChange(v => {
+    const color = SPECTRAL_COLORS[v] || '#ffffff';
+    PARAMS.spectralColor = color;
+    renderer.updateSunParams({ spectralColor: color });
+});
+
 const fOverlays = gui.addFolder('Overlays');
 fOverlays.add(PARAMS, 'cultureOverlay').name('Cultures').onChange(v => {
     planet.setDrawCultureOverlay(v);
@@ -474,12 +641,14 @@ gui.domElement.appendChild(infoContent);
 
 function toggleGasGiantUI(type) {
     const isGG = type === 'gasgiant';
+    const isSun = type === 'sun';
     fGasGiant.domElement.style.display = isGG ? '' : 'none';
     fEarthlike.domElement.style.display = type === 'earthlike' ? '' : 'none';
-    fGeo.domElement.style.display = isGG ? 'none' : '';
-    fOverlays.domElement.style.display = isGG ? 'none' : '';
+    fGeo.domElement.style.display = (isGG || isSun) ? 'none' : '';
+    fOverlays.domElement.style.display = (isGG || isSun) ? 'none' : '';
     fBarren.domElement.style.display = type === 'barren' ? '' : 'none';
     fAirlessColors.domElement.style.display = type === 'airless' ? '' : 'none';
+    fSun.domElement.style.display = isSun ? '' : 'none';
 }
 
 toggleGasGiantUI(planet.getPlanetType());
@@ -526,7 +695,8 @@ window.setRotation = newRotation => {
 
 window.setDrawMode = newMode => {
     planet.setDrawMode(newMode);
-    if (!renderer.hasMesh(newMode) && planet.getPlanetType() !== 'gasgiant') {
+    const ptype = planet.getPlanetType();
+    if (!renderer.hasMesh(newMode) && ptype !== 'gasgiant' && ptype !== 'sun') {
         renderer.rebuildPlanet(
             planet.mesh, planet.map, planet.quadGeometry,
             newMode,
@@ -600,6 +770,7 @@ window.setBurgOverlay = flag => {
 window.applyPopulation = () => {
     if (!planet.mesh || !planet.map.r_elevation) return;
     const ptype = planet.getPlanetType();
+    if (ptype === 'sun') return;
     if (ptype !== 'earthlike') {
         window._population = null;
         renderer.rebuildOverlay(null, null, null);
@@ -679,7 +850,9 @@ window.pickRegion = function (ndcX, ndcY) {
 
     const ptype = planet.getPlanetType();
     let biome;
-    if (ptype === 'gasgiant') {
+    if (ptype === 'sun') {
+        biome = 'Stellar Surface';
+    } else if (ptype === 'gasgiant') {
         biome = 'Gas Giant';
     } else if (ptype === 'airless') {
         if (e < -0.3) biome = 'Crater Floor';
