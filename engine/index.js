@@ -91,12 +91,10 @@ export {
 
 export {
     generateSunSphereMaterial,
-    generateSunRaysGeometry,
-    generateSunFlaresGeometry,
     generateSunGlowGeometry,
-    createSunRaysMaterial,
-    createSunFlaresMaterial,
     createSunGlowMaterial,
 } from './render/sun-shaders.js';
+
+export * from './core/defaults.js';
 
 export { rebuildColormapTexture } from './render/colormap-texture.js';

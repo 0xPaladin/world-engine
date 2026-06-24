@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createPlanetSurfaceMaterial, createLineMaterial, createOverlayMaterial, createCloudMaterial, createGasGiantMaterial } from './shaders.js';
 import { generateVoronoiGeometry } from '../core/planet.js';
 import { rebuildColormapTexture } from './colormap-texture.js';
-import { generateSunSphereMaterial, generateSunRaysGeometry, generateSunFlaresGeometry, generateSunGlowGeometry, createSunRaysMaterial, createSunFlaresMaterial, createSunGlowMaterial } from './sun-shaders.js';
+import { generateSunSphereMaterial, generateSunGlowGeometry, createSunGlowMaterial } from './sun-shaders.js';
+import { GAS_GIANT_DEFAULTS, SUN_DEFAULTS, SHADER_DEFAULTS } from '../core/defaults.js';
 
 let renderer, scene, camera, controls;
 let planetMaterial, lineMaterial, overlayMaterial;
@@ -27,8 +28,6 @@ let cloudMaterial = null;
 
 let sunGroup = null;
 let sunSphereMaterial = null;
-let sunRaysMesh = null;
-let sunFlaresMesh = null;
 let sunGlowMesh = null;
 
 let currentDrawMode = 'quads';
@@ -85,12 +84,12 @@ export function initRenderer(canvas) {
 }
 
 let _gasGiantParams = {
-    scale: 1,
-    turbulence: 2,
-    blur: 0.5,
-    colorA: new THREE.Color(0xfff8f0),
-    colorB: new THREE.Color(0xf0e8b0),
-    colorC: new THREE.Color(0xafa0d0),
+    scale: GAS_GIANT_DEFAULTS.scale,
+    turbulence: GAS_GIANT_DEFAULTS.turbulence,
+    blur: GAS_GIANT_DEFAULTS.blur,
+    colorA: new THREE.Color(GAS_GIANT_DEFAULTS.colorA),
+    colorB: new THREE.Color(GAS_GIANT_DEFAULTS.colorB),
+    colorC: new THREE.Color(GAS_GIANT_DEFAULTS.colorC),
     seed: 0,
 };
 
@@ -144,16 +143,6 @@ export function render() {
     const vpMatrix = new THREE.Matrix4().multiplyMatrices(
         camera.projectionMatrix, camera.matrixWorldInverse
     );
-    if (sunRaysMesh && sunRaysMesh.material) {
-        sunRaysMesh.material.uniforms.uTime.value = t;
-        sunRaysMesh.material.uniforms.uCamPos.value.copy(camera.position);
-        sunRaysMesh.material.uniforms.uViewProjection.value.copy(vpMatrix);
-    }
-    if (sunFlaresMesh && sunFlaresMesh.material) {
-        sunFlaresMesh.material.uniforms.uTime.value = t;
-        sunFlaresMesh.material.uniforms.uCamPos.value.copy(camera.position);
-        sunFlaresMesh.material.uniforms.uViewProjection.value.copy(vpMatrix);
-    }
     if (sunGlowMesh && sunGlowMesh.material) {
         sunGlowMesh.material.uniforms.uCamPos.value.copy(camera.position);
         sunGlowMesh.material.uniforms.uCamUp.value.copy(camera.up);
@@ -249,51 +238,31 @@ export function hasMesh(mode) {
 }
 
 let _sunParams = {
-    numRays: 80,
-    numFlares: 40,
-    hueSpread: 0.25,
-    hue: 0.05,
-    rayLength: 1.5,
-    rayWidth: 0.02,
-    raysOpacity: 0.5,
-    flareWidth: 0.03,
-    flareAmp: 0.3,
-    flaresOpacity: 0.4,
-    noiseFreq: 1.5,
-    noiseAmp: 1.0,
-    glowTint: 1.2,
-    glowBrightness: 1.5,
-    glowFalloff: 2.0,
-    glowRadius: 0.5,
-    sphereFresnelPower: 1.5,
-    sphereFresnelInfluence: 0.4,
-    sphereTint: 1.8,
-    sphereBase: 0.05,
-    sphereBrightnessOffset: 0.0,
-    sphereBrightness: 3.0,
-    sphereScale: 2.0,
-    sphereContrast: 0.15,
+    glowTint: SUN_DEFAULTS.glowTint,
+    glowBrightness: SUN_DEFAULTS.glowBrightness,
+    glowFalloff: SUN_DEFAULTS.glowFalloff,
+    glowRadius: SUN_DEFAULTS.glowRadius,
+    sphereBrightness: SUN_DEFAULTS.sphereBrightness,
+    noiseScale: SUN_DEFAULTS.noiseScale,
+    glowPower: SUN_DEFAULTS.glowPower,
+    fresnelPower: SUN_DEFAULTS.fresnelPower,
     spectralColor: new THREE.Color(1, 1, 1),
 };
 
 // Return the current sun/star parameter object (for GUI binding)
 export function getSunParams() { return _sunParams; }
 
-// Update sun/star uniforms on all four sun materials (sphere, rays, flares, glow)
+// Update sun/star uniforms on sphere and glow materials
 export function updateSunParams(params) {
     Object.assign(_sunParams, params);
     if (_sunParams.spectralColor && !_sunParams.spectralColor.isColor) {
         _sunParams.spectralColor = new THREE.Color(_sunParams.spectralColor);
     }
     if (sunSphereMaterial) {
-        sunSphereMaterial.uniforms.uFresnelPower.value = _sunParams.sphereFresnelPower;
-        sunSphereMaterial.uniforms.uFresnelInfluence.value = _sunParams.sphereFresnelInfluence;
-        sunSphereMaterial.uniforms.uTint.value = _sunParams.sphereTint;
-        sunSphereMaterial.uniforms.uBase.value = _sunParams.sphereBase;
-        sunSphereMaterial.uniforms.uBrightnessOffset.value = _sunParams.sphereBrightnessOffset;
         sunSphereMaterial.uniforms.uBrightness.value = _sunParams.sphereBrightness;
-        sunSphereMaterial.uniforms.uScale.value = _sunParams.sphereScale;
-        sunSphereMaterial.uniforms.uContrast.value = _sunParams.sphereContrast;
+        sunSphereMaterial.uniforms.uNoiseScale.value = _sunParams.noiseScale;
+        sunSphereMaterial.uniforms.uGlowPower.value = _sunParams.glowPower;
+        sunSphereMaterial.uniforms.uFresnelPower.value = _sunParams.fresnelPower;
         sunSphereMaterial.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
     }
     if (sunGlowMesh && sunGlowMesh.material) {
@@ -303,56 +272,21 @@ export function updateSunParams(params) {
         sunGlowMesh.material.uniforms.uRadius.value = _sunParams.glowRadius;
         sunGlowMesh.material.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
     }
-    if (sunRaysMesh && sunRaysMesh.material) {
-        sunRaysMesh.material.uniforms.uWidth.value = _sunParams.rayWidth;
-        sunRaysMesh.material.uniforms.uLength.value = _sunParams.rayLength;
-        sunRaysMesh.material.uniforms.uOpacity.value = _sunParams.raysOpacity;
-        sunRaysMesh.material.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
-    }
-    if (sunFlaresMesh && sunFlaresMesh.material) {
-        sunFlaresMesh.material.uniforms.uWidth.value = _sunParams.flareWidth;
-        sunFlaresMesh.material.uniforms.uAmp.value = _sunParams.flareAmp;
-        sunFlaresMesh.material.uniforms.uOpacity.value = _sunParams.flaresOpacity;
-        sunFlaresMesh.material.uniforms.uSpectralColor.value.copy(_sunParams.spectralColor);
-    }
 }
 
-// Build full sun group: procedural sphere material + rays + flares + camera-facing glow
+// Build full sun group: procedural sphere material + camera-facing glow
 function rebuildSun(meshData, mapData, quadGeom, mode) {
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(quadGeom.xyz), 3));
     geom.setIndex(new THREE.BufferAttribute(new Uint32Array(quadGeom.I), 1));
     geom.computeVertexNormals();
 
-    const seed = mapData._sunSeed || 123;
     sunSphereMaterial = generateSunSphereMaterial(_sunParams.spectralColor);
+    sunSphereMaterial.uniforms.uBrightness.value = _sunParams.sphereBrightness;
+    sunSphereMaterial.uniforms.uNoiseScale.value = _sunParams.noiseScale;
+    sunSphereMaterial.uniforms.uGlowPower.value = _sunParams.glowPower;
+    sunSphereMaterial.uniforms.uFresnelPower.value = _sunParams.fresnelPower;
     const sphereMesh = new THREE.Mesh(geom, sunSphereMaterial);
-
-    const raysGeom = generateSunRaysGeometry(_sunParams.numRays, seed);
-    const raysMat = createSunRaysMaterial({
-        hueSpread: _sunParams.hueSpread,
-        hue: _sunParams.hue,
-        length: _sunParams.rayLength,
-        width: _sunParams.rayWidth,
-        noiseFreq: _sunParams.noiseFreq,
-        noiseAmp: _sunParams.noiseAmp,
-        opacity: _sunParams.raysOpacity,
-        spectralColor: _sunParams.spectralColor,
-    });
-    sunRaysMesh = new THREE.LineSegments(raysGeom, raysMat);
-
-    const flaresGeom = generateSunFlaresGeometry(_sunParams.numFlares, 123);
-    const flaresMat = createSunFlaresMaterial({
-        hueSpread: _sunParams.hueSpread,
-        hue: _sunParams.hue,
-        width: _sunParams.flareWidth,
-        amp: _sunParams.flareAmp,
-        noiseFreq: _sunParams.noiseFreq,
-        noiseAmp: _sunParams.noiseAmp,
-        opacity: _sunParams.flaresOpacity,
-        spectralColor: _sunParams.spectralColor,
-    });
-    sunFlaresMesh = new THREE.LineSegments(flaresGeom, flaresMat);
 
     const glowGeom = generateSunGlowGeometry();
     const glowMat = createSunGlowMaterial({
@@ -366,8 +300,6 @@ function rebuildSun(meshData, mapData, quadGeom, mode) {
 
     sunGroup = new THREE.Group();
     sunGroup.add(sphereMesh);
-    sunGroup.add(sunRaysMesh);
-    sunGroup.add(sunFlaresMesh);
     sunGroup.add(sunGlowMesh);
     scene.add(sunGroup);
 }

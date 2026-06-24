@@ -4,21 +4,31 @@ import { default as FlatQueue } from 'flatqueue';
 import { vec3 } from 'gl-matrix';
 import aleaPRNG from './aleaPRNG-1.1.js';
 import { makeSphere } from './sphere-mesh.js';
+import {
+    DEFAULT_SEED, DEFAULT_N, DEFAULT_P, DEFAULT_JITTER, DEFAULT_ROTATION,
+    DEFAULT_DRAW_MODE, DEFAULT_PLANET_TYPE, DEFAULT_BARREN_SUBTYPE,
+    DEFAULT_TEMP_OFFSET, DEFAULT_RAIN_OFFSET, DEFAULT_WATER_LEVEL,
+    DEFAULT_DRAW_PLATE_VECTORS, DEFAULT_DRAW_PLATE_BOUNDARIES,
+    DEFAULT_DRAW_CULTURE_OVERLAY, DEFAULT_DRAW_STATE_BORDERS,
+    DEFAULT_DRAW_STATE_OVERLAY, DEFAULT_DRAW_PROVINCE_OVERLAY,
+    DEFAULT_DRAW_PROVINCE_BORDERS, DEFAULT_DRAW_BURG_OVERLAY,
+    COLLISION_THRESHOLD,
+} from './defaults.js';
 
-let _seed = 123;
+let _seed = DEFAULT_SEED;
 
-let N = 25000;
-let P = 20;
-let jitter = 0.75;
-let rotation = -1;
-let drawMode = 'quads';
-let draw_plateVectors = false;
-let draw_plateBoundaries = false;
-let tempOffset = 0;
-let rainOffset = 0;
-let waterLevel = 0;
-let _planetType = 'earthlike';
-let _barrenSubtype = 'barren';
+let N = DEFAULT_N;
+let P = DEFAULT_P;
+let jitter = DEFAULT_JITTER;
+let rotation = DEFAULT_ROTATION;
+let drawMode = DEFAULT_DRAW_MODE;
+let draw_plateVectors = DEFAULT_DRAW_PLATE_VECTORS;
+let draw_plateBoundaries = DEFAULT_DRAW_PLATE_BOUNDARIES;
+let tempOffset = DEFAULT_TEMP_OFFSET;
+let rainOffset = DEFAULT_RAIN_OFFSET;
+let waterLevel = DEFAULT_WATER_LEVEL;
+let _planetType = DEFAULT_PLANET_TYPE;
+let _barrenSubtype = DEFAULT_BARREN_SUBTYPE;
 
 let _randomNoise = new SimplexNoise(aleaPRNG(_seed));
 const persistence = 2 / 3;
@@ -230,7 +240,6 @@ function assignDistanceField(mesh, seeds_r, stop_r) {
 }
 
 
-const COLLISION_THRESHOLD = 0.75;
 // Detect convergent/divergent plate boundaries; classify into mountain/ocean/coastline sets
 function findCollisions(mesh, r_xyz, plate_is_ocean, r_plate, plate_vec) {
     const deltaTime = 1e-2;
@@ -684,12 +693,12 @@ function generateSunMap() {
     quadGeometry.setMap(mesh, map);
 }
 
-let draw_cultureOverlay = false;
-let draw_stateBorders = false;
-let draw_stateOverlay = false;
-let draw_provinceOverlay = false;
-let draw_provinceBorders = false;
-let draw_burgOverlay = false;
+let draw_cultureOverlay = DEFAULT_DRAW_CULTURE_OVERLAY;
+let draw_stateBorders = DEFAULT_DRAW_STATE_BORDERS;
+let draw_stateOverlay = DEFAULT_DRAW_STATE_OVERLAY;
+let draw_provinceOverlay = DEFAULT_DRAW_PROVINCE_OVERLAY;
+let draw_provinceBorders = DEFAULT_DRAW_PROVINCE_BORDERS;
+let draw_burgOverlay = DEFAULT_DRAW_BURG_OVERLAY;
 
 export function getSeed() { return _seed; }
 export function setSeed(v) { _seed = v; }

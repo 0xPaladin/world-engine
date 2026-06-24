@@ -4,11 +4,11 @@ Procedural planet generation on a sphere with interactive climate control, cultu
 
 Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.com/x/1843-planet-generation/) experiment. Extended with culture/state population generation, climate sliders from [Azgaar's Fantasy Map Generator](https://github.com/Azgaar/Fantasy-Map-Generator). All part of an interactive SPA.
 
-**Note:** Originally used regl for rendering; now fully migrated to Three.js. The standalone `engine/` library provides both generation and Three.js-based rendering with no GUI dependencies.
+**Note:** Originally used regl for rendering; now fully migrated to Three.js. The standalone `engine/` library provides both generation and Three.js-based rendering with no GUI dependencies. All shared defaults live in `engine/core/defaults.js` for bundled self-containment.
 
 ## Features
 
-- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world with barren/hostile subtype), gas giant (procedural shader), and star (procedural sun with rays/flares/glow) — each with its own generation pipeline and colormap
+- **Planet types**: switch between Earth-like, airless (cratered), barren (desert world with barren/hostile subtype), gas giant (procedural shader), and star (procedural sun with spectral-color surface and camera-facing glow) — each with its own generation pipeline and colormap
 - **Procedural terrain**: tectonic plates, elevation, moisture, temperature, rivers on a Fibonacci sphere mesh
 - **Interactive controls**: planet type, seed, region count, plate count, jitter, planet type
 - **Save/Load**: persist all world parameters to `saves/` directory via server API; name, save, and load worlds
@@ -33,13 +33,13 @@ Forked from [Red Blob Games' 1843-planet-generation](https://www.redblobgames.co
 | Airless    | Grayscale (user-colorable) | Craters + FBM baseline | No    | 0        | No     | No         | no |
 | Barren     | Red/orange (user-colorable) | Plate + volcano boost or volcanic domes (per subtype) | All continental | 0–0.15 | No | No | only when subtype=hostile |
 | Gas Giant  | Procedural       | Zero elevation, bands + noise | — | 0 | No | No | no |
-| Star       | Procedural (4D simplex FBM) | Uniform 0.5 | Single flat | 0 | No | No | no |
+| Star       | Procedural (3D value noise fBm) | Uniform 0.5 | Single flat | 0 | No | No | no |
 
 Barren has a **subtype** dropdown (barren/hostile) accessible via the "Barren Type" folder:
 - **barren subtype**: volcano-boosted elevation (1.5–3× on 40% of plate centers), trace moisture with polar ice, red/orange palette
 - **hostile subtype**: volcanic dome elevation constructs, zero moisture, yellow/orange biomes, translucent noise cloud sphere
 
-Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays. Gas Giant uses a procedural fragment shader (bands + noise) instead of a mesh-based colormap; the Planet, Climate, and Overlays folders are hidden when selected. Star uses a fully procedural 4D simplex FBM shader with animated rays, flares, and glow — no colormap or climate controls.
+Changing the planet type triggers a full regeneration: new mesh, map, colormap texture, and rendering pipeline. Non-Earth-like types skip river generation, population simulation, and all culture/state/burg overlays. Gas Giant uses a procedural fragment shader (bands + noise) instead of a mesh-based colormap; the Planet, Climate, and Overlays folders are hidden when selected. Star uses a 3D value noise fBm shader (from sangillee.com) on the sphere surface with a spectral-color-driven glow aura — no colormap, rays, flares, or climate controls.
 
 ## Architecture
 
@@ -49,6 +49,7 @@ Changing the planet type triggers a full regeneration: new mesh, map, colormap t
 engine/
   index.js              — Public API entry point
   core/
+    defaults.js         → All shared default values (seed, N, P, jitter, colors, spectral, sun params)
     planet.js           → mesh gen, map gen, plates, elevation, rivers, climate
     sphere-mesh.js      → Fibonacci sphere mesh, Delaunay, Voronoi
     world-population.js → culture/state/burg/province Dijkstra generation
@@ -57,11 +58,18 @@ engine/
   render/
     renderer.js         → Three.js scene, camera, materials, draw pipeline, overlay
     shaders.js          → ShaderMaterial: colormap surface, lines, overlays, gas giant, cloud
-    sun-shaders.js      → Sun/star ShaderMaterials & geometry generators
+    sun-shaders.js      → Sun/star ShaderMaterials & geometry generators (sphere + glow only)
     colormap-texture.js → Three.js DataTexture from colormap.js
 ```
 
 Use standalone: `import { generateMesh, initRenderer, render } from './engine/index.js'`
+
+A pre-built ESM bundle is also available:
+```js
+import * as WorldEngine from './dist/world-engine.core.min.js'
+```
+
+The bundle exposes all 130 exports from the engine, including planet generation functions (`generateMesh`, `generateMap`, `generatePopulation`), rendering functions (`initRenderer`, `render`), shader/material factories, and all shared defaults from `defaults.js` (`DEFAULT_SEED`, `SPECTRAL_COLORS`, `SUN_DEFAULTS`, etc.). `three` and `three/addons/` are kept external for CDN importmap loading.
 
 ### App (UI layer)
 
@@ -72,12 +80,12 @@ src/
 
 `src/main.js` imports from `engine/` — the only file with GUI dependencies.
 
-### Shared modules
+### Shared modules (legacy CJS, for reference)
 
 ```
-sphere-mesh.js          → Fibonacci sphere + Delaunay (legacy CJS, for reference)
-world-population.js     → Population generation (legacy CJS, for reference)
-colormap.js             → 64×64 RGBA lookup texture (legacy CJS, for reference)
+sphere-mesh.js          → Fibonacci sphere + Delaunay (legacy CJS)
+world-population.js     → Population generation (legacy CJS)
+colormap.js             → 64×64 RGBA lookup texture (legacy CJS)
 server.js               → Bun static-file server (port 3333)
 ```
 
@@ -100,8 +108,11 @@ npm install
 
 ## Build
 
-Engine bundle (standalone, no GUI):
+Engine bundle (standalone, no GUI) — two variants:
 ```bash
+# Full engine with all 130 exports
+npx esbuild engine/index.js --bundle --minify --sourcemap --format=esm --outfile=dist/world-engine.core.min.js --external:three --external:three/addons/
+# Legacy alias
 npx esbuild engine/index.js --bundle --minify --sourcemap --outfile=dist/_bundle.engine.js --external:three --external:three/addons/
 ```
 
@@ -126,49 +137,43 @@ Then open `http://localhost:3333/`
 
 ## Controls
 
-| Control          | Effect                                          |
-| ---------------- | ----------------------------------------------- |
-| World Name       | Name for saving the current world               |
-| Saved Worlds     | Dropdown of previously saved worlds             |
-| Save World       | Persist all settings to server                  |
-| Load World       | Restore a saved world                           |
-| Planet Type      | Earth-like, Airless, Barren, Gas Giant, Star    |
-| Seed             | PRNG seed for deterministic generation          |
-| New Planet       | Increment seed + full regeneration + population |
-| Regions          | Number of Voronoi regions (100–100,000)         |
-| Plates           | Number of tectonic plates (5–100)               |
-| Jitter           | Random perturbation of sphere points            |
-| Temperature      | Multiplicative biome shift on land only         |
-| Rainfall         | Additive moisture shift                         |
-| Water Level      | Elevation offset raising/lowering sea level     |
-| Barren Subtype   | Barren or Hostile (terrain + biome variant) ²   |
+| Control            | Effect                                          |
+| ------------------ | ----------------------------------------------- |
+| World Name         | Name for saving the current world               |
+| Saved Worlds       | Dropdown of previously saved worlds             |
+| Save World         | Persist all settings to server                  |
+| Load World         | Restore a saved world                           |
+| Planet Type        | Earth-like, Airless, Barren, Gas Giant, Star    |
+| Seed               | PRNG seed for deterministic generation          |
+| New Planet         | Increment seed + full regeneration + population |
+| Regions            | Number of Voronoi regions (100–100,000)         |
+| Plates             | Number of tectonic plates (5–100)               |
+| Jitter             | Random perturbation of sphere points            |
+| Temperature        | Multiplicative biome shift on land only         |
+| Rainfall           | Additive moisture shift                         |
+| Water Level        | Elevation offset raising/lowering sea level     |
+| Barren Subtype     | Barren or Hostile (terrain + biome variant) ²   |
 | Barren Colors A/B/C | Three user-colorable elevation stops (low/mid/high) ² |
 | Airless Colors A/B/C | Three user-colorable elevation stops (low/mid/high) ³ |
-| Spectral Type    | Harvard spectral class (O/B/A/F/G/K/M/D) ⁴      |
-| Brightness       | Star brightness multiplier ⁴                     |
-| Noise Scale      | Star surface noise frequency ⁴                   |
-| Noise Contrast   | Star surface noise contrast ⁴                    |
-| Tint             | Star surface tint multiplier ⁴                   |
-| Fresnel          | Star edge glow influence ⁴                       |
-| Glow Radius      | Star aura size ⁴                                 |
-| Glow Brightness  | Star aura intensity ⁴                            |
-| Ray Length       | Star ray length ⁴                                |
-| Ray Width        | Star ray width ⁴                                 |
-| Rays Opacity     | Star ray transparency ⁴                          |
-| Flare Amp        | Star flare amplitude ⁴                           |
-| Flares Opacity   | Star flare transparency ⁴                        |
-| Cultures         | Number of cultures for population gen (2–40) ¹  |
-| Apply Changes    | Re-run population/culture simulation ¹          |
-| Culture overlay  | Color Voronoi cells by culture ¹                |
-| State borders    | White lines between different states ¹          |
-| State overlay    | Color regions by state ¹                        |
-| Province overlay | Color regions by province ¹                     |
-| Province borders | White lines between different provinces ¹       |
-| Burg overlay     | Dots for towns and capitals ¹                   |
-| Plate vectors    | Show plate movement arrows                      |
-| Plate boundaries | Highlight plate edges                           |
-| Draw Mode        | Quads (shaded) or Flat (centroid)               |
-| Click planet     | Show region info panel                          |
+| Spectral Type      | Harvard spectral class (O/B/A/F/G/K/M/D) — sets color + brightness/glow default ⁴ |
+| Brightness         | Star surface brightness multiplier ⁴            |
+| Noise Scale        | Star surface noise frequency ⁴                  |
+| Glow Power         | Star edge glow falloff exponent ⁴               |
+| Fresnel Power      | Star Fresnel edge brightness exponent ⁴         |
+| Glow Radius        | Star aura size ⁴                                |
+| Glow Brightness    | Star aura intensity ⁴                           |
+| Cultures           | Number of cultures for population gen (2–40) ¹  |
+| Apply Changes      | Re-run population/culture simulation ¹          |
+| Culture overlay    | Color Voronoi cells by culture ¹                |
+| State borders      | White lines between different states ¹          |
+| State overlay      | Color regions by state ¹                        |
+| Province overlay   | Color regions by province ¹                     |
+| Province borders   | White lines between different provinces ¹       |
+| Burg overlay       | Dots for towns and capitals ¹                   |
+| Plate vectors      | Show plate movement arrows                      |
+| Plate boundaries   | Highlight plate edges                           |
+| Draw Mode          | Quads (shaded) or Flat (centroid)               |
+| Click planet       | Show region info panel                          |
 
 ¹ Population/culture/state/province/burg overlays — Earth-like only
 ² Barren type folder — visible only when Planet Type is Barren
@@ -197,6 +202,8 @@ Names are generated from seeded syllable templates (placeholder for full Azgaar 
 - Rendering uses `ShaderMaterial` with `dFdx`/`dFdy` derivative-based normals and 2D colormap lookup
 - Climate updates set `uv.needsUpdate = true` on the planet geometry (no mesh rebuild needed)
 - Picking uses `Raycaster` for ray-sphere intersection + brute-force nearest-region lookup
+- All shared default values are defined in `engine/core/defaults.js` — imported by planet.js, colormap.js, renderer.js, sun-shaders.js, and main.js
+- Sun sphere uses 3D value noise fBm (6 octaves, rotation per octave) from [sangillee.com](https://sangillee.com/2024-06-29-create-realistic-sun-with-shaders/) — surface color derived from spectral type, no rays or flares
 
 ## License
 

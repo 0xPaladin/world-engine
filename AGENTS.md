@@ -6,6 +6,7 @@
 engine/                 ← Standalone library (generation + rendering, no GUI)
   index.js              ← Public API entry point
   core/                 ← Planet generation & simulation
+    defaults.js         → All shared default values (seed, N, P, jitter, colors, spectral, sun params)
     planet.js           → mesh gen, map gen, plates, elevation, rivers, climate
     sphere-mesh.js      → Fibonacci sphere mesh, Delaunay, Voronoi
     world-population.js → culture/state/burg/province Dijkstra generation
@@ -14,7 +15,7 @@ engine/                 ← Standalone library (generation + rendering, no GUI)
   render/               ← Three.js rendering pipeline
     renderer.js         → scene, camera, materials, draw pipeline, overlay
     shaders.js          → ShaderMaterial: colormap surface, lines, overlays, gas giant, cloud
-    sun-shaders.js      → Sun/star ShaderMaterials & geometry generators
+    sun-shaders.js      → Sun/star ShaderMaterials: 3D value-noise sphere + camera-facing glow
     colormap-texture.js → Three.js DataTexture from colormap.js
 
 src/
@@ -23,6 +24,12 @@ src/
 ```
 
 Use engine standalone: `import { generateMesh, initRenderer, render } from './engine/index.js'`
+
+## Defaults
+
+- All shared defaults defined in `engine/core/defaults.js` (seed, N, P, jitter, rotation, draw mode, planet type, temp/rain/water offsets, overlay flags, population counts, GAS_GIANT_DEFAULTS, BARREN_DEFAULTS, AIRLESS_DEFAULTS, SPECTRAL_COLORS, SPECTRAL_DEFAULTS, SUN_DEFAULTS, SHADER_DEFAULTS, COLLISION_THRESHOLD)
+- Imported by `planet.js`, `colormap.js`, `renderer.js`, `sun-shaders.js`, and `main.js`
+- Ensures bundled engine has no external default dependencies
 
 ## Server
 
@@ -84,16 +91,17 @@ Use engine standalone: `import { generateMesh, initRenderer, render } from './en
 
 ### Star (Sun)
 
-- Uses `ShaderMaterial` with a fully procedural GLSL fragment shader — 4D simplex noise FBM (5 octaves) on 3 rotating layers, fresnel glow, brightness-to-color mapping (b → b² → b⁴ curve)
-- Sun sphere parameters (Brightness, Noise Scale, Noise Contrast, Tint, Fresnel) exposed via uniforms; updated live from GUI
-- Additional visual elements: animated rays (`LineSegments` with twisted-sine noise ribbon curves), animated flares (`LineSegments` with view-facing strips), and a camera-facing glow aura (radial falloff quad)
-- Sun rays/flares parameters (Ray Length, Ray Width, Ray Opacity, Flare Amp, Flare Opacity) and glow parameters (Glow Radius, Glow Brightness) exposed via Sun GUI folder
-- Geometry for rays and flares generated procedurally with seeded random anchor positions
-- `uTime` uniform updated each frame drives noise layer rotation and ray/flare animation
-- `uViewProjection` and `uCamPos` uniforms synced from camera each frame for view-facing billboarding
-- Sun GUI folder (hidden for other types) provides all controls plus a "Spectral Type" dropdown (O/B/A/F/G/K/M/D — defaults to G-type yellow)
-- Spectral colors defined in `SPECTRAL_COLORS` map in `main.js` (O=#9bb0ff, B=#aabfff, A=#f8f7ff, F=#fff4e8, G=#fff4b5, K=#ffc66a, M=#ff8b5a, D=#ffffff)
-- `uSpectralColor` uniform on all four sun materials, multiplied into final output via `brightnessToColor()` and `vColor` multiply
+- Uses `ShaderMaterial` with a fully procedural GLSL fragment shader — 3D value noise fBm (6 octaves, rotation per octave via mat3), Fresnel glow, spectral-color-driven surface (no hardcoded orange/red)
+- Surface color derived entirely from `uSpectralColor`: dark areas = spectral * 0.4, bright areas approach white, veining detail = spectral-tinted secondary noise
+- Sun sphere parameters (Brightness, Noise Scale, Glow Power, Fresnel Power) exposed via uniforms; updated live from GUI
+- Camera-facing glow aura (radial falloff quad) with `brightnessToColor()` mapping — spectral tint applied via `uSpectralColor`
+- No rays, no flares — all ray/flare geometry and material code removed
+- Sun GUI folder (hidden for other types) provides: Spectral Type dropdown (at top), Brightness, Noise Scale, Glow Power, Fresnel Power, Glow Radius, Glow Brightness
+- Spectral colors defined in `SPECTRAL_COLORS` in `engine/core/defaults.js` (O=#6699ff, B=#99bbff, A=#bbddff, F=#fff8e8, G=#fff4b5, K=#ffaa44, M=#ff5533, D=#ffffff)
+- Per-spectral-type defaults for brightness/glowPower/fresnelPower defined in `SPECTRAL_DEFAULTS` — applied on type change
+- `uSpectralColor` uniform on sphere and glow materials
+- `uTime` uniform updated each frame drives noise layer rotation
+- `uViewProjection` and `uCamPos` uniforms synced from camera each frame for glow billboarding
 - `spectralColor` and `spectralType` saved/loaded with world saves
 - `applyClimate()`, `rebuildRivers()`, and population generation are all skipped for sun
 - Biome label in picker returns "Stellar Surface"
@@ -104,7 +112,7 @@ Use engine standalone: `import { generateMesh, initRenderer, render } from './en
 - `colormap.js` exports `getData(type, colorA?, colorB?, colorC?)` returning a 64×64 RGBA `Uint8Array` palette
 - `airlessColormap()` and `barrenColormap()` accept 3 hex color strings and blend them across elevation using `lerpColor()`
 - `earthlikeColormap()` uses fixed hardcoded values (unchanged)
-- Default colors match the previous hardcoded appearance for backward compatibility
+- Default colors imported from `defaults.js` (BARREN_DEFAULTS, AIRLESS_DEFAULTS) — no local duplication
 - `colormap-texture.js` exports `rebuildColormapTexture(type, colorA?, colorB?, colorC?)` creating a fresh `DataTexture`
 - `renderer.updateColormapTexture(type)` swaps the `u_colormap` uniform on `planetMaterial`
 - `renderer.updateColormapColors(type, {colorA, colorB, colorC})` regenerates the colormap texture with user colors and swaps it on `planetMaterial`

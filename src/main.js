@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import * as planet from '../engine/core/planet.js';
 import * as renderer from '../engine/render/renderer.js';
 import { generatePopulation } from '../engine/core/world-population.js';
-import GUI from 'lil-gui';
+import { GAS_GIANT_DEFAULTS, BARREN_DEFAULTS, AIRLESS_DEFAULTS, SPECTRAL_COLORS, SPECTRAL_DEFAULTS, SUN_DEFAULTS, DEFAULT_NUM_CULTURES, DEFAULT_NUM_STATES, DEFAULT_MAX_BURGS } from '../engine/core/defaults.js';
+import { XGUI } from "lil-xgui";
 
 const canvas = document.getElementById('output');
 
@@ -93,9 +94,9 @@ async function doSave() {
         waterLevel: planet.getWaterLevel(),
         plateVectors: planet.getDrawPlateVectors(),
         plateBoundaries: planet.getDrawPlateBoundaries(),
-        cultures: window._numCultures || 16,
-        numStates: window._numStates || 16,
-        maxBurgs: window._maxBurgs || 10000,
+        cultures: window._numCultures || DEFAULT_NUM_CULTURES,
+        numStates: window._numStates || DEFAULT_NUM_STATES,
+        maxBurgs: window._maxBurgs || DEFAULT_MAX_BURGS,
         cultureOverlay: planet.getDrawCultureOverlay(),
         stateBorders: planet.getDrawStateBorders(),
         stateOverlay: planet.getDrawStateOverlay(),
@@ -116,28 +117,14 @@ async function doSave() {
         airlessColorC: PARAMS.airlessColorC,
         barrenSubtype: PARAMS.barrenSubtype,
         ...SUN_DEFAULTS,
-        hueSpread: PARAMS.hueSpread,
-        hue: PARAMS.hue,
-        rayLength: PARAMS.rayLength,
-        rayWidth: PARAMS.rayWidth,
-        raysOpacity: PARAMS.raysOpacity,
-        flareWidth: PARAMS.flareWidth,
-        flareAmp: PARAMS.flareAmp,
-        flaresOpacity: PARAMS.flaresOpacity,
-        noiseFreq: PARAMS.noiseFreq,
-        noiseAmp: PARAMS.noiseAmp,
         glowTint: PARAMS.glowTint,
         glowBrightness: PARAMS.glowBrightness,
         glowFalloff: PARAMS.glowFalloff,
         glowRadius: PARAMS.glowRadius,
-        sphereFresnelPower: PARAMS.sphereFresnelPower,
-        sphereFresnelInfluence: PARAMS.sphereFresnelInfluence,
-        sphereTint: PARAMS.sphereTint,
-        sphereBase: PARAMS.sphereBase,
-        sphereBrightnessOffset: PARAMS.sphereBrightnessOffset,
         sphereBrightness: PARAMS.sphereBrightness,
-        sphereScale: PARAMS.sphereScale,
-        sphereContrast: PARAMS.sphereContrast,
+        noiseScale: PARAMS.noiseScale,
+        glowPower: PARAMS.glowPower,
+        fresnelPower: PARAMS.fresnelPower,
         spectralType: PARAMS.spectralType,
         spectralColor: PARAMS.spectralColor,
     };
@@ -212,55 +199,28 @@ async function doLoad() {
     PARAMS.airlessColorB = data.airlessColorB || AIRLESS_DEFAULTS.colorB;
     PARAMS.airlessColorC = data.airlessColorC || AIRLESS_DEFAULTS.colorC;
     PARAMS.barrenSubtype = data.barrenSubtype || 'barren';
-    PARAMS.hueSpread = data.hueSpread || SUN_DEFAULTS.hueSpread;
-    PARAMS.hue = data.hue || SUN_DEFAULTS.hue;
-    PARAMS.rayLength = data.rayLength || SUN_DEFAULTS.rayLength;
-    PARAMS.rayWidth = data.rayWidth || SUN_DEFAULTS.rayWidth;
-    PARAMS.raysOpacity = data.raysOpacity || SUN_DEFAULTS.raysOpacity;
-    PARAMS.flareWidth = data.flareWidth || SUN_DEFAULTS.flareWidth;
-    PARAMS.flareAmp = data.flareAmp || SUN_DEFAULTS.flareAmp;
-    PARAMS.flaresOpacity = data.flaresOpacity || SUN_DEFAULTS.flaresOpacity;
-    PARAMS.noiseFreq = data.noiseFreq || SUN_DEFAULTS.noiseFreq;
-    PARAMS.noiseAmp = data.noiseAmp || SUN_DEFAULTS.noiseAmp;
     PARAMS.glowTint = data.glowTint || SUN_DEFAULTS.glowTint;
     PARAMS.glowBrightness = data.glowBrightness || SUN_DEFAULTS.glowBrightness;
     PARAMS.glowFalloff = data.glowFalloff || SUN_DEFAULTS.glowFalloff;
     PARAMS.glowRadius = data.glowRadius || SUN_DEFAULTS.glowRadius;
-    PARAMS.sphereFresnelPower = data.sphereFresnelPower || SUN_DEFAULTS.sphereFresnelPower;
-    PARAMS.sphereFresnelInfluence = data.sphereFresnelInfluence || SUN_DEFAULTS.sphereFresnelInfluence;
-    PARAMS.sphereTint = data.sphereTint || SUN_DEFAULTS.sphereTint;
-    PARAMS.sphereBase = data.sphereBase || SUN_DEFAULTS.sphereBase;
-    PARAMS.sphereBrightnessOffset = data.sphereBrightnessOffset || SUN_DEFAULTS.sphereBrightnessOffset;
-    PARAMS.sphereBrightness = data.sphereBrightness || SUN_DEFAULTS.sphereBrightness;
-    PARAMS.sphereScale = data.sphereScale || SUN_DEFAULTS.sphereScale;
-    PARAMS.sphereContrast = data.sphereContrast || SUN_DEFAULTS.sphereContrast;
     PARAMS.spectralType = data.spectralType || SUN_DEFAULTS.spectralType;
+    const sDefs = SPECTRAL_DEFAULTS[PARAMS.spectralType] || {};
+    PARAMS.sphereBrightness = data.sphereBrightness || sDefs.sphereBrightness || SUN_DEFAULTS.sphereBrightness;
+    PARAMS.noiseScale = data.noiseScale || SUN_DEFAULTS.noiseScale;
+    PARAMS.glowPower = data.glowPower || sDefs.glowPower || SUN_DEFAULTS.glowPower;
+    PARAMS.fresnelPower = data.fresnelPower || sDefs.fresnelPower || SUN_DEFAULTS.fresnelPower;
     PARAMS.spectralColor = data.spectralColor || SPECTRAL_COLORS[PARAMS.spectralType] || SPECTRAL_COLORS.G;
     PARAMS.worldName = name;
 
     renderer.updateSunParams({
-        hueSpread: PARAMS.hueSpread,
-        hue: PARAMS.hue,
-        rayLength: PARAMS.rayLength,
-        rayWidth: PARAMS.rayWidth,
-        raysOpacity: PARAMS.raysOpacity,
-        flareWidth: PARAMS.flareWidth,
-        flareAmp: PARAMS.flareAmp,
-        flaresOpacity: PARAMS.flaresOpacity,
-        noiseFreq: PARAMS.noiseFreq,
-        noiseAmp: PARAMS.noiseAmp,
         glowTint: PARAMS.glowTint,
         glowBrightness: PARAMS.glowBrightness,
         glowFalloff: PARAMS.glowFalloff,
         glowRadius: PARAMS.glowRadius,
-        sphereFresnelPower: PARAMS.sphereFresnelPower,
-        sphereFresnelInfluence: PARAMS.sphereFresnelInfluence,
-        sphereTint: PARAMS.sphereTint,
-        sphereBase: PARAMS.sphereBase,
-        sphereBrightnessOffset: PARAMS.sphereBrightnessOffset,
         sphereBrightness: PARAMS.sphereBrightness,
-        sphereScale: PARAMS.sphereScale,
-        sphereContrast: PARAMS.sphereContrast,
+        noiseScale: PARAMS.noiseScale,
+        glowPower: PARAMS.glowPower,
+        fresnelPower: PARAMS.fresnelPower,
         spectralColor: PARAMS.spectralColor,
     });
 
@@ -291,63 +251,7 @@ async function doLoad() {
     updateAllControllers(gui);
 }
 
-const GAS_GIANT_DEFAULTS = {
-    scale: 1,
-    turbulence: 2,
-    blur: 0.5,
-    colorA: '#fff8f0',
-    colorB: '#f0e8b0',
-    colorC: '#afa0d0',
-};
 
-const BARREN_DEFAULTS = {
-    colorA: '#321408',
-    colorB: '#aa5523',
-    colorC: '#fae6e6',
-};
-
-const AIRLESS_DEFAULTS = {
-    colorA: '#555555',
-    colorB: '#aaaaaa',
-    colorC: '#eeeeee',
-};
-
-const SPECTRAL_COLORS = {
-    O: '#9bb0ff',
-    B: '#aabfff',
-    A: '#f8f7ff',
-    F: '#fff4e8',
-    G: '#fff4b5',
-    K: '#ffc66a',
-    M: '#ff8b5a',
-    D: '#ffffff',
-};
-
-const SUN_DEFAULTS = {
-    hueSpread: 0.25,
-    hue: 0.05,
-    rayLength: 1.5,
-    rayWidth: 0.02,
-    raysOpacity: 0.5,
-    flareWidth: 0.03,
-    flareAmp: 0.3,
-    flaresOpacity: 0.4,
-    noiseFreq: 1.5,
-    noiseAmp: 1.0,
-    glowTint: 1.2,
-    glowBrightness: 1.5,
-    glowFalloff: 2.0,
-    glowRadius: 0.5,
-    sphereFresnelPower: 1.5,
-    sphereFresnelInfluence: 0.4,
-    sphereTint: 1.8,
-    sphereBase: 0.05,
-    sphereBrightnessOffset: 0.0,
-    sphereBrightness: 3.0,
-    sphereScale: 2.0,
-    sphereContrast: 0.15,
-    spectralType: 'G',
-};
 
 const PARAMS = {
     worldName: 'My World',
@@ -565,50 +469,42 @@ fAirlessColors.addColor(PARAMS, 'airlessColorC').name('Color C').onChange(update
 
 function updateSun() {
     renderer.updateSunParams({
-        hueSpread: PARAMS.hueSpread,
-        hue: PARAMS.hue,
-        rayLength: PARAMS.rayLength,
-        rayWidth: PARAMS.rayWidth,
-        raysOpacity: PARAMS.raysOpacity,
-        flareWidth: PARAMS.flareWidth,
-        flareAmp: PARAMS.flareAmp,
-        flaresOpacity: PARAMS.flaresOpacity,
-        noiseFreq: PARAMS.noiseFreq,
-        noiseAmp: PARAMS.noiseAmp,
         glowTint: PARAMS.glowTint,
         glowBrightness: PARAMS.glowBrightness,
         glowFalloff: PARAMS.glowFalloff,
         glowRadius: PARAMS.glowRadius,
-        sphereFresnelPower: PARAMS.sphereFresnelPower,
-        sphereFresnelInfluence: PARAMS.sphereFresnelInfluence,
-        sphereTint: PARAMS.sphereTint,
-        sphereBase: PARAMS.sphereBase,
-        sphereBrightnessOffset: PARAMS.sphereBrightnessOffset,
         sphereBrightness: PARAMS.sphereBrightness,
-        sphereScale: PARAMS.sphereScale,
-        sphereContrast: PARAMS.sphereContrast,
+        noiseScale: PARAMS.noiseScale,
+        glowPower: PARAMS.glowPower,
+        fresnelPower: PARAMS.fresnelPower,
         spectralColor: PARAMS.spectralColor,
     });
 }
 
 const fSun = gui.addFolder('Sun');
-fSun.add(PARAMS, 'sphereBrightness', 0, 6, 0.1).name('Brightness').onChange(updateSun);
-fSun.add(PARAMS, 'sphereScale', 0.5, 4, 0.1).name('Noise Scale').onChange(updateSun);
-fSun.add(PARAMS, 'sphereContrast', 0.01, 0.5, 0.01).name('Noise Contrast').onChange(updateSun);
-fSun.add(PARAMS, 'sphereTint', 0.5, 4, 0.1).name('Tint').onChange(updateSun);
-fSun.add(PARAMS, 'sphereFresnelInfluence', 0, 1, 0.05).name('Fresnel').onChange(updateSun);
-fSun.add(PARAMS, 'glowRadius', 0.1, 2, 0.05).name('Glow Radius').onChange(updateSun);
-fSun.add(PARAMS, 'glowBrightness', 0, 4, 0.1).name('Glow Brightness').onChange(updateSun);
-fSun.add(PARAMS, 'rayLength', 0.5, 4, 0.1).name('Ray Length').onChange(updateSun);
-fSun.add(PARAMS, 'rayWidth', 0.005, 0.1, 0.005).name('Ray Width').onChange(updateSun);
-fSun.add(PARAMS, 'raysOpacity', 0, 1, 0.05).name('Rays Opacity').onChange(updateSun);
-fSun.add(PARAMS, 'flareAmp', 0, 1, 0.05).name('Flare Amp').onChange(updateSun);
-fSun.add(PARAMS, 'flaresOpacity', 0, 1, 0.05).name('Flares Opacity').onChange(updateSun);
 fSun.add(PARAMS, 'spectralType', ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'D']).name('Spectral Type').onChange(v => {
     const color = SPECTRAL_COLORS[v] || '#ffffff';
     PARAMS.spectralColor = color;
-    renderer.updateSunParams({ spectralColor: color });
+    const defs = SPECTRAL_DEFAULTS[v];
+    if (defs) {
+        PARAMS.sphereBrightness = defs.sphereBrightness;
+        PARAMS.glowPower = defs.glowPower;
+        PARAMS.fresnelPower = defs.fresnelPower;
+    }
+    renderer.updateSunParams({
+        spectralColor: color,
+        sphereBrightness: PARAMS.sphereBrightness,
+        glowPower: PARAMS.glowPower,
+        fresnelPower: PARAMS.fresnelPower,
+    });
+    fSun.controllers.forEach(c => c.updateDisplay());
 });
+fSun.add(PARAMS, 'sphereBrightness', 0, 4, 0.1).name('Brightness').onChange(updateSun);
+fSun.add(PARAMS, 'noiseScale', 1, 10, 0.5).name('Noise Scale').onChange(updateSun);
+fSun.add(PARAMS, 'glowPower', 0.5, 8, 0.5).name('Glow Power').onChange(updateSun);
+fSun.add(PARAMS, 'fresnelPower', 0.5, 6, 0.5).name('Fresnel Power').onChange(updateSun);
+fSun.add(PARAMS, 'glowRadius', 0.1, 2, 0.05).name('Glow Radius').onChange(updateSun);
+fSun.add(PARAMS, 'glowBrightness', 0, 4, 0.1).name('Glow Brightness').onChange(updateSun);
 
 const fOverlays = gui.addFolder('Overlays');
 fOverlays.add(PARAMS, 'cultureOverlay').name('Cultures').onChange(v => {
@@ -780,7 +676,7 @@ window.applyPopulation = () => {
         renderer.rebuildBurgOverlay(null, null, null);
         return;
     }
-    const population = generatePopulation(planet.mesh, planet.map, window._numCultures || 8, planet.getSeed(), window._numStates || 16, window._maxBurgs || 10000);
+    const population = generatePopulation(planet.mesh, planet.map, window._numCultures || DEFAULT_NUM_CULTURES, planet.getSeed(), window._numStates || DEFAULT_NUM_STATES, window._maxBurgs || DEFAULT_MAX_BURGS);
     window._population = population;
     renderer.rebuildOverlay(planet.mesh, population, planet.map);
     renderer.rebuildStateOverlay(planet.mesh, population, planet.map);
@@ -795,7 +691,7 @@ window.applyPopulation = () => {
     renderer.toggleBurgOverlay(planet.getDrawBurgOverlay());
 };
 
-window.getNumCultures = () => window._numCultures || 16;
+window.getNumCultures = () => window._numCultures || DEFAULT_NUM_CULTURES;
 window.setNumCultures = v => { window._numCultures = v; };
 
 window.pickRegion = function (ndcX, ndcY) {
@@ -961,9 +857,9 @@ function animate() {
 }
 requestAnimationFrame(animate);
 
-window._numCultures = 16;
-window._numStates = 16;
-window._maxBurgs = 10000;
+window._numCultures = DEFAULT_NUM_CULTURES;
+window._numStates = DEFAULT_NUM_STATES;
+window._maxBurgs = DEFAULT_MAX_BURGS;
 
 setTimeout(() => { window.applyPopulation(); }, 100);
 

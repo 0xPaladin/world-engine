@@ -87,8 +87,7 @@ function barrenColormap(colorA, colorB, colorC) {
     });
 }
 
-const BARREN_DEFAULTS = { colorA: '#321408', colorB: '#aa5523', colorC: '#fae6e6' };
-const AIRLESS_DEFAULTS = { colorA: '#555555', colorB: '#aaaaaa', colorC: '#eeeeee' };
+import { BARREN_DEFAULTS, AIRLESS_DEFAULTS } from './defaults.js';
 
 // Return colormap data for a given planet type, with optional user colors for airless/barren
 export function getData(type, colorA, colorB, colorC) {
